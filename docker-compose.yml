@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # Main Database for Users, Workers, and Work Records
+  postgres:
+    image: postgres:15-alpine
+    container_name: aomaoi-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: aomaoi_db
+      POSTGRES_USER: aomaoi_user
+      POSTGRES_PASSWORD: aomaoi_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Redis for Caching and JWT Management
+  redis:
+    image: redis:7-alpine
+    container_name: aomaoi-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,44 @@
+services:
+  # Spring Boot Application
+  app:
+    build: .
+    container_name: aomaoi-app
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/aomaoi_db
+      SPRING_DATASOURCE_USERNAME: aomaoi_user
+      SPRING_DATASOURCE_PASSWORD: aomaoi_password
+      SPRING_DATA_REDIS_HOST: redis
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  # Main Database for Users, Workers, and Work Records
+  postgres:
+    image: postgres:15-alpine
+    container_name: aomaoi-postgres
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: aomaoi_db
+      POSTGRES_USER: aomaoi_user
+      POSTGRES_PASSWORD: aomaoi_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Redis for Caching and JWT Management
+  redis:
+    image: redis:7-alpine
+    container_name: aomaoi-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

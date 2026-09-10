@@ -19,10 +19,12 @@ public class WorkLogService {
 
     private final WorkLogRepository workLogRepository;
     private final WorkerRepository workerRepository;
+    private final com.aomaoi.backend.repository.FarmRepository farmRepository;
 
-    public WorkLogService(WorkLogRepository workLogRepository, WorkerRepository workerRepository) {
+    public WorkLogService(WorkLogRepository workLogRepository, WorkerRepository workerRepository, com.aomaoi.backend.repository.FarmRepository farmRepository) {
         this.workLogRepository = workLogRepository;
         this.workerRepository = workerRepository;
+        this.farmRepository = farmRepository;
     }
 
     public List<Map<String, Object>> getAllLogs() {
@@ -56,6 +58,17 @@ public class WorkLogService {
         log.setTotal(calculateWage(dto));
 
         WorkLog saved = workLogRepository.save(log);
+
+        // Update the Farm's payroll
+        if (worker.getFarmId() != null) {
+            com.aomaoi.backend.entity.Farm farm = this.farmRepository.findById(Long.parseLong(worker.getFarmId())).orElse(null);
+            if (farm != null) {
+                farm.setTotalWages(farm.getTotalWages() + log.getTotal().doubleValue());
+                farm.setMonthlyWages(farm.getMonthlyWages() + log.getTotal().doubleValue());
+                this.farmRepository.save(farm);
+            }
+        }
+
         return logToMap(saved);
     }
 

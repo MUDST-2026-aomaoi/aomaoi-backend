@@ -45,16 +45,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // 2. If a token exists and the user isn't logged in yet for this request...
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+            try {
+                UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
-            // 3. Verify the token belongs to them and isn't expired
-            if (jwtUtil.validateToken(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                
-                // 4. Tell Spring Security: "This user is officially authenticated!"
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                // 3. Verify the token belongs to them and isn't expired
+                if (jwtUtil.validateToken(jwt, userDetails)) {
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    
+                    // 4. Tell Spring Security: "This user is officially authenticated!"
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
+            } catch (org.springframework.security.core.userdetails.UsernameNotFoundException e) {
+                // The user was deleted from the database. Treat as unauthenticated.
             }
         }
         

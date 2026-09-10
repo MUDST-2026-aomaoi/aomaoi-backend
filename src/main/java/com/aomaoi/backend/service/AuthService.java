@@ -32,6 +32,12 @@ public class AuthService {
     @Autowired
     private PasswordEncoder passwordEncoder; // We will use this later for the OTP/Change Password feature
 
+    @Autowired
+    private com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
+
+    @Autowired
+    private com.aomaoi.backend.repository.WorkerRepository workerRepository;
+
     public Map<String, Object> login(LoginRequest request) {
         // 1. Let Spring Security verify the username and password securely against the database
         authenticationManager.authenticate(
@@ -53,6 +59,28 @@ public class AuthService {
         userData.put("role", user.getRole());
         userData.put("isFirstLogin", user.getIsFirstLogin());
         
+        String fullName = user.getUsername();
+        Long actualId = user.getId();
+        
+        if ("superadmin".equals(user.getRole())) {
+            fullName = "superadmin";
+        } else if ("admin".equals(user.getRole())) {
+            var adminOpt = adminProfileRepository.findByUserUsername(user.getUsername());
+            if (adminOpt.isPresent()) {
+                fullName = adminOpt.get().getFullName();
+                actualId = adminOpt.get().getId();
+            }
+        } else if ("worker".equals(user.getRole())) {
+            var workerOpt = workerRepository.findByUserUsername(user.getUsername());
+            if (workerOpt.isPresent()) {
+                fullName = workerOpt.get().getFullName();
+                actualId = workerOpt.get().getId();
+            }
+        }
+        
+        userData.put("id", actualId);
+        userData.put("fullName", fullName);
+        
         response.put("success", true);
         response.put("token", token);
         response.put("user", userData);
@@ -66,6 +94,19 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setIsFirstLogin(false);
         userRepository.save(user);
+
+        // Update status to active
+        if ("worker".equals(user.getRole())) {
+            workerRepository.findByUserUsername(username).ifPresent(w -> {
+                w.setStatus("active");
+                workerRepository.save(w);
+            });
+        } else if ("admin".equals(user.getRole())) {
+            adminProfileRepository.findByUserUsername(username).ifPresent(a -> {
+                a.setStatus("active");
+                adminProfileRepository.save(a);
+            });
+        }
     }
 }
 

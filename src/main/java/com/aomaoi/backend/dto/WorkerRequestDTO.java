@@ -4,6 +4,10 @@ import lombok.Data;
 
 @Data
 public class WorkerRequestDTO {
-    // Add fields matching frontend worker form here
+    private String fullName;
+    private String nickname;
+    private String username;
+    private String phone;
+    private String avatar;
+    private String tempPassword;
 }
-

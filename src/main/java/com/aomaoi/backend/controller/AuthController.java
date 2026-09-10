@@ -35,4 +35,18 @@ public class AuthController {
             return ResponseEntity.status(401).body(errorResponse);
         }
     }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Map<String, Object>> changePassword(
+            @RequestBody com.aomaoi.backend.dto.ChangePasswordRequest request,
+            org.springframework.security.core.Authentication authentication) {
+        
+        String username = authentication.getName();
+        authService.changePassword(username, request.getNewPassword());
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Password changed successfully");
+        return ResponseEntity.ok(response);
+    }
 }

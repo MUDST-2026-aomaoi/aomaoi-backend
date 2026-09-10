@@ -16,8 +16,10 @@ public class Worker {
     private String fullName;
     private String nickname;
     private String phone;
+    @Column(columnDefinition = "TEXT")
     private String avatar;
     private String status = "active";
+    private String farmId;
     
     private LocalDate joinedDate;
 

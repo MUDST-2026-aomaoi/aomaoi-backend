@@ -22,6 +22,12 @@ public class WorkerService {
     private UserRepository userRepository;
 
     @Autowired
+    private com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
+
+    @Autowired
+    private com.aomaoi.backend.repository.FarmRepository farmRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     public List<Worker> getAllWorkers() {
@@ -56,6 +62,22 @@ public class WorkerService {
         worker.setAvatar(dto.getAvatar());
         worker.setStatus("pending");
         worker.setUser(user);
+
+        // Get currently logged-in user and assign farmId if they are an admin
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated()) {
+            String currentUsername = auth.getName();
+            adminProfileRepository.findByUserUsername(currentUsername).ifPresent(adminProfile -> {
+                worker.setFarmId(adminProfile.getFarmId());
+                if (adminProfile.getFarmId() != null) {
+                    com.aomaoi.backend.entity.Farm farm = farmRepository.findById(Long.parseLong(adminProfile.getFarmId())).orElse(null);
+                    if (farm != null) {
+                        farm.setWorkerCount(farm.getWorkerCount() + 1);
+                        farmRepository.save(farm);
+                    }
+                }
+            });
+        }
 
         return workerRepository.save(worker);
     }

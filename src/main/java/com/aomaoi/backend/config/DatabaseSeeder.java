@@ -1,7 +1,9 @@
 package com.aomaoi.backend.config;
 
 import com.aomaoi.backend.entity.User;
+import com.aomaoi.backend.entity.Farm;
 import com.aomaoi.backend.repository.UserRepository;
+import com.aomaoi.backend.repository.FarmRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,6 +18,12 @@ public class DatabaseSeeder implements CommandLineRunner {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
+    
+    @Autowired
+    private FarmRepository farmRepository;
+
     @Override
     public void run(String... args) throws Exception {
         // Only run this if the 'users' table is completely empty
@@ -24,31 +32,37 @@ public class DatabaseSeeder implements CommandLineRunner {
             // 1. Super Admin account
             User superAdmin = new User();
             superAdmin.setUsername("superadmin");
-            superAdmin.setPassword(passwordEncoder.encode("admin123")); 
+            superAdmin.setPassword(passwordEncoder.encode("1234")); 
             superAdmin.setRole("superadmin");
             superAdmin.setIsFirstLogin(false);
             userRepository.save(superAdmin);
 
-            // 2. Admin account
+            // 2. Farm "ฟาร์มโชคชัย"
+            Farm farm = new Farm();
+            farm.setName("ฟาร์มโชคชัย");
+            farm.setLocation("นครราชสีมา");
+            farm.setAdminCount(1);
+            farmRepository.save(farm);
+
+            // 3. Admin account "deedee2"
             User admin = new User();
-            admin.setUsername("admin");
-            admin.setPassword(passwordEncoder.encode("admin123"));
+            admin.setUsername("deedee2");
+            admin.setPassword(passwordEncoder.encode("1234"));
             admin.setRole("admin");
             admin.setIsFirstLogin(false);
             userRepository.save(admin);
-
-            // 3. Worker account
-            User worker = new User();
-            worker.setUsername("worker1");
-            worker.setPassword(passwordEncoder.encode("admin123"));
-            worker.setRole("worker");
-            worker.setIsFirstLogin(true); // Workers should change their password on first login
-            userRepository.save(worker);
             
-            System.out.println("✅ Database Seeded:");
-            System.out.println("   - superadmin / admin123 (role: superadmin)");
-            System.out.println("   - admin / admin123 (role: admin)");
-            System.out.println("   - worker1 / admin123 (role: worker)");
+            com.aomaoi.backend.entity.AdminProfile adminProfile = new com.aomaoi.backend.entity.AdminProfile();
+            adminProfile.setUser(admin);
+            adminProfile.setFullName("Deedee 2");
+            adminProfile.setPhone("0812345678");
+            adminProfile.setStatus("active");
+            adminProfile.setFarmId(String.valueOf(farm.getId()));
+            adminProfileRepository.save(adminProfile);
+
+            System.out.println("🌱 Database Seeded:");
+            System.out.println("   - superadmin / 1234 (role: superadmin)");
+            System.out.println("   - deedee2 / 1234 (role: admin, farm: ฟาร์มโชคชัย)");
         }
     }
 }

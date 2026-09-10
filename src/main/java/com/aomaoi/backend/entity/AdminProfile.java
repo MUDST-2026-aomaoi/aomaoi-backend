@@ -8,17 +8,16 @@ import java.time.LocalDate;
 
 @Entity
 @Data
-public class Worker {
+public class AdminProfile {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     private String fullName;
-    private String nickname;
     private String phone;
+    private String farmId;
     private String avatar;
-    private String status = "active";
-    
+    private String status = "pending";
     private LocalDate joinedDate;
 
     @OneToOne

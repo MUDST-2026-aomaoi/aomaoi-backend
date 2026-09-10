@@ -22,6 +22,9 @@ public class AdminProfileService {
     private UserRepository userRepository;
 
     @Autowired
+    private com.aomaoi.backend.repository.FarmRepository farmRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     public List<AdminProfile> getAllAdmins() {
@@ -52,6 +55,14 @@ public class AdminProfileService {
         admin.setAvatar(dto.getAvatar());
         admin.setStatus("pending");
         admin.setUser(user);
+
+        if (dto.getFarmId() != null) {
+            com.aomaoi.backend.entity.Farm farm = farmRepository.findById(Long.parseLong(dto.getFarmId())).orElse(null);
+            if (farm != null) {
+                farm.setAdminCount(farm.getAdminCount() + 1);
+                farmRepository.save(farm);
+            }
+        }
 
         return adminRepository.save(admin);
     }

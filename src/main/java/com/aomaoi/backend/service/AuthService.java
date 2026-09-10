@@ -59,5 +59,13 @@ public class AuthService {
 
         return response;
     }
+
+    public void changePassword(String username, String newPassword) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setIsFirstLogin(false);
+        userRepository.save(user);
+    }
 }
 

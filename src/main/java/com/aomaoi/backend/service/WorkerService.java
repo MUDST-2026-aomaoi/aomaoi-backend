@@ -44,6 +44,10 @@ public class WorkerService {
 
     @Transactional
     public Worker addWorker(WorkerRequestDTO dto) {
+        if (dto.getUsername() == null || !dto.getUsername().matches("^[\\w\\p{Punct}]+$")) {
+            throw new RuntimeException("Username cannot contain spaces and must contain only characters, numbers, and special characters.");
+        }
+
         if (userRepository.existsByUsername(dto.getUsername())) {
             throw new RuntimeException("Username already exists");
         }
@@ -91,6 +95,9 @@ public class WorkerService {
         worker.setAvatar(dto.getAvatar());
 
         if (dto.getUsername() != null && !dto.getUsername().equals(worker.getUser().getUsername())) {
+            if (!dto.getUsername().matches("^[\\w\\p{Punct}]+$")) {
+                throw new RuntimeException("Username cannot contain spaces and must contain only characters, numbers, and special characters.");
+            }
             if (userRepository.existsByUsername(dto.getUsername())) {
                 throw new RuntimeException("Username already exists");
             }

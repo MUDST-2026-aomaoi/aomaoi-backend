@@ -61,6 +61,7 @@ public class AuthService {
         
         String fullName = user.getUsername();
         Long actualId = user.getId();
+        String avatar = null;
         
         if ("superadmin".equals(user.getRole())) {
             fullName = "superadmin";
@@ -69,17 +70,22 @@ public class AuthService {
             if (adminOpt.isPresent()) {
                 fullName = adminOpt.get().getFullName();
                 actualId = adminOpt.get().getId();
+                avatar = adminOpt.get().getAvatar();
             }
         } else if ("worker".equals(user.getRole())) {
             var workerOpt = workerRepository.findByUserUsername(user.getUsername());
             if (workerOpt.isPresent()) {
                 fullName = workerOpt.get().getFullName();
                 actualId = workerOpt.get().getId();
+                avatar = workerOpt.get().getAvatar();
             }
         }
         
         userData.put("id", actualId);
         userData.put("fullName", fullName);
+        if (avatar != null) {
+            userData.put("avatar", avatar);
+        }
         
         response.put("success", true);
         response.put("token", token);

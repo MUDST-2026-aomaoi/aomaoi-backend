@@ -23,4 +23,6 @@ jobs:
 
     - name: Build and Test with Maven
       # This command compiles the code and runs any tests to ensure it's not broken
-      run: ./mvnw clean package
+      run: |
+        chmod +x mvnw
+        ./mvnw clean package

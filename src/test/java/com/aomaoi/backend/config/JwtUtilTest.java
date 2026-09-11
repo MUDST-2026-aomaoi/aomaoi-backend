@@ -24,6 +24,7 @@ class JwtUtilTest {
 
         userDetails = new User("testuser", "password", Collections.emptyList());
     }
+
     @Test
     void testGenerateAndExtractToken() {
         String token = jwtUtil.generateToken(userDetails, "ADMIN");
@@ -34,6 +35,21 @@ class JwtUtilTest {
 
         String role = jwtUtil.extractRole(token);
         assertEquals("ADMIN", role);
+    }
+
+    @Test
+    void testValidateToken_Success() {
+        String token = jwtUtil.generateToken(userDetails, "WORKER");
+        boolean isValid = jwtUtil.validateToken(token, userDetails);
+        assertTrue(isValid);
+    }
+
+    @Test
+    void testValidateToken_WrongUser() {
+        String token = jwtUtil.generateToken(userDetails, "WORKER");
+        UserDetails otherUser = new User("otheruser", "password", Collections.emptyList());
+        boolean isValid = jwtUtil.validateToken(token, otherUser);
+        assertFalse(isValid);
     }
 
     

@@ -44,6 +44,47 @@ class AdminProfileControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, response.getBody().size());
     }
+    @Test
+    void getAdminById() {
+        when(adminService.getAdminById(1L)).thenReturn(admin);
+
+        ResponseEntity<AdminProfile> response = adminController.getAdminById(1L);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Admin One", response.getBody().getFullName());
+    }
+
+    @Test
+    void addAdmin() {
+        AdminRequestDTO dto = new AdminRequestDTO();
+        when(adminService.addAdmin(dto)).thenReturn(admin);
+
+        ResponseEntity<AdminProfile> response = adminController.addAdmin(dto);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    void updateAdmin() {
+        AdminRequestDTO dto = new AdminRequestDTO();
+        when(adminService.updateAdmin(1L, dto)).thenReturn(admin);
+
+        ResponseEntity<AdminProfile> response = adminController.updateAdmin(1L, dto);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    void deleteAdmin() {
+        doNothing().when(adminService).deleteAdmin(1L);
+
+        ResponseEntity<Void> response = adminController.deleteAdmin(1L);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(adminService).deleteAdmin(1L);
+    }
 
     
 }

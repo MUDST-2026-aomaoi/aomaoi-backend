@@ -126,5 +126,32 @@ class AdminProfileServiceTest {
         assertThrows(RuntimeException.class, () -> adminProfileService.addAdmin(dto));
     }
 
-   
+    @Test
+    void updateAdmin_Success() {
+        AdminRequestDTO dto = new AdminRequestDTO();
+        dto.setUsername("updateduser");
+        dto.setFullName("Updated Admin");
+        dto.setPhone("0800000000");
+
+        when(adminRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.existsByUsername("updateduser")).thenReturn(false);
+        when(adminRepository.save(any(AdminProfile.class))).thenAnswer(i -> i.getArgument(0));
+
+        AdminProfile updated = adminProfileService.updateAdmin(1L, dto);
+
+        assertEquals("Updated Admin", updated.getFullName());
+        assertEquals("updateduser", updated.getUser().getUsername());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void deleteAdmin_Success() {
+        when(adminRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(adminRepository.save(any(AdminProfile.class))).thenAnswer(i -> i.getArgument(0));
+
+        adminProfileService.deleteAdmin(1L);
+
+        assertEquals("inactive", admin.getStatus());
+        verify(adminRepository).save(admin);
+    }
 }

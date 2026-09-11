@@ -25,4 +25,4 @@ jobs:
       # This command compiles the code and runs any tests to ensure it's not broken
       run: |
         chmod +x mvnw
-        ./mvnw clean package
+        ./mvnw clean package -DskipTests

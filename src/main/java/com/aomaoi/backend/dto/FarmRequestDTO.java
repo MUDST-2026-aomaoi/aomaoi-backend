@@ -6,4 +6,5 @@ import lombok.Data;
 public class FarmRequestDTO {
     private String name;
     private String location;
+    private String image;
 }

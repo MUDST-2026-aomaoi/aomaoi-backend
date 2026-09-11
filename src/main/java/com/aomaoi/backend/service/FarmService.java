@@ -26,6 +26,7 @@ public class FarmService {
         Farm farm = new Farm();
         farm.setName(dto.getName());
         farm.setLocation(dto.getLocation());
+        farm.setImage(dto.getImage());
         return farmRepository.save(farm);
     }
 
@@ -33,6 +34,9 @@ public class FarmService {
         Farm farm = getFarmById(id);
         farm.setName(dto.getName());
         farm.setLocation(dto.getLocation());
+        if (dto.getImage() != null) {
+            farm.setImage(dto.getImage());
+        }
         return farmRepository.save(farm);
     }
 

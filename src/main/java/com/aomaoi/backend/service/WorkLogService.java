@@ -20,17 +20,30 @@ public class WorkLogService {
     private final WorkLogRepository workLogRepository;
     private final WorkerRepository workerRepository;
     private final com.aomaoi.backend.repository.FarmRepository farmRepository;
+    private final com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
 
-    public WorkLogService(WorkLogRepository workLogRepository, WorkerRepository workerRepository, com.aomaoi.backend.repository.FarmRepository farmRepository) {
+    public WorkLogService(WorkLogRepository workLogRepository, WorkerRepository workerRepository, com.aomaoi.backend.repository.FarmRepository farmRepository, com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository) {
         this.workLogRepository = workLogRepository;
         this.workerRepository = workerRepository;
         this.farmRepository = farmRepository;
+        this.adminProfileRepository = adminProfileRepository;
     }
 
     public List<Map<String, Object>> getAllLogs() {
-        return workLogRepository.findAllByOrderByWorkDateDescIdDesc().stream()
-                .map(this::logToMap)
-                .collect(Collectors.toList());
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        List<WorkLog> logs = workLogRepository.findAllByOrderByWorkDateDescIdDesc();
+
+        if (auth != null && auth.isAuthenticated() && !auth.getName().equals("superadmin") && !auth.getName().equals("anonymousUser")) {
+            String currentUsername = auth.getName();
+            return adminProfileRepository.findByUserUsername(currentUsername)
+                    .map(adminProfile -> logs.stream()
+                            .filter(log -> adminProfile.getFarmId().equals(log.getWorker().getFarmId()))
+                            .map(this::logToMap)
+                            .collect(Collectors.toList()))
+                    .orElseGet(() -> logs.stream().map(this::logToMap).collect(Collectors.toList()));
+        }
+
+        return logs.stream().map(this::logToMap).collect(Collectors.toList());
     }
 
     public Map<String, Object> addLog(WorkLogRequestDTO dto) {

@@ -13,6 +13,10 @@ public class Farm {
 
     private String name;
     private String location;
+    
+    @Column(columnDefinition = "TEXT")
+    private String image;
+    
     private Integer workerCount = 0;
     private Integer adminCount = 0;
     private Double monthlyWages = 0.0;

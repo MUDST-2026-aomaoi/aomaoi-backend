@@ -31,6 +31,15 @@ public class WorkerService {
     private PasswordEncoder passwordEncoder;
 
     public List<Worker> getAllWorkers() {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !auth.getName().equals("superadmin") && !auth.getName().equals("anonymousUser")) {
+            String currentUsername = auth.getName();
+            return adminProfileRepository.findByUserUsername(currentUsername)
+                    .map(adminProfile -> workerRepository.findAll().stream()
+                            .filter(worker -> adminProfile.getFarmId().equals(worker.getFarmId()))
+                            .toList())
+                    .orElseGet(() -> workerRepository.findAll());
+        }
         return workerRepository.findAll();
     }
 

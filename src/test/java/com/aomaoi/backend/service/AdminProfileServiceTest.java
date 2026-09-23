@@ -37,6 +37,9 @@ class AdminProfileServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private AdminProfileService adminProfileService;
 

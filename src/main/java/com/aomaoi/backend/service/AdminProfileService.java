@@ -5,7 +5,7 @@ import com.aomaoi.backend.entity.User;
 import com.aomaoi.backend.entity.AdminProfile;
 import com.aomaoi.backend.repository.UserRepository;
 import com.aomaoi.backend.repository.AdminProfileRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,19 +13,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class AdminProfileService {
 
-    @Autowired
-    private AdminProfileRepository adminRepository;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private com.aomaoi.backend.repository.FarmRepository farmRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    private final AdminProfileRepository adminRepository;
+    private final UserRepository userRepository;
+    private final com.aomaoi.backend.repository.FarmRepository farmRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final AuditLogService auditLogService;
 
     public List<AdminProfile> getAllAdmins() {
         return adminRepository.findAll();
@@ -64,7 +59,11 @@ public class AdminProfileService {
             }
         }
 
-        return adminRepository.save(admin);
+        AdminProfile savedAdmin = adminRepository.save(admin);
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = auth != null ? auth.getName() : "system";
+        auditLogService.logAction("CREATE_ADMIN", currentUsername, user.getUsername(), "Created new admin account");
+        return savedAdmin;
     }
 
     @Transactional
@@ -83,7 +82,11 @@ public class AdminProfileService {
             userRepository.save(admin.getUser());
         }
 
-        return adminRepository.save(admin);
+        AdminProfile savedAdmin = adminRepository.save(admin);
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = auth != null ? auth.getName() : "system";
+        auditLogService.logAction("UPDATE_ADMIN", currentUsername, admin.getUser().getUsername(), "Updated admin account details");
+        return savedAdmin;
     }
 
     @Transactional
@@ -91,5 +94,9 @@ public class AdminProfileService {
         AdminProfile admin = getAdminById(id);
         admin.setStatus("inactive");
         adminRepository.save(admin);
+        
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = auth != null ? auth.getName() : "system";
+        auditLogService.logAction("DELETE_ADMIN", currentUsername, admin.getUser().getUsername(), "Deactivated admin account");
     }
 }

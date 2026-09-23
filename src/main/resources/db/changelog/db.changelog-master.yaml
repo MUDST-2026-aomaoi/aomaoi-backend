@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changes/001-create-users.yaml
+  - include:
+      file: db/changelog/changes/002-create-farm.yaml
+  - include:
+      file: db/changelog/changes/003-create-worker.yaml
+  - include:
+      file: db/changelog/changes/004-create-admin-profile.yaml
+  - include:
+      file: db/changelog/changes/005-create-work-logs.yaml
+  - include:
+      file: db/changelog/changes/006-create-audit-logs.yaml
+  - include:
+      file: db/changelog/changes/007-add-watering-dates.yaml

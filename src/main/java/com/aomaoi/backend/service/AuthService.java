@@ -4,7 +4,7 @@ import com.aomaoi.backend.config.JwtUtil;
 import com.aomaoi.backend.dto.LoginRequest;
 import com.aomaoi.backend.entity.User;
 import com.aomaoi.backend.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -15,28 +15,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
-    @Autowired
-    private AuthenticationManager authenticationManager;
-
-    @Autowired
-    private CustomUserDetailsService userDetailsService;
-
-    @Autowired
-    private JwtUtil jwtUtil;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder; // We will use this later for the OTP/Change Password feature
-
-    @Autowired
-    private com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
-
-    @Autowired
-    private com.aomaoi.backend.repository.WorkerRepository workerRepository;
+    private final AuthenticationManager authenticationManager;
+    private final CustomUserDetailsService userDetailsService;
+    private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
+    private final com.aomaoi.backend.repository.WorkerRepository workerRepository;
 
     public Map<String, Object> login(LoginRequest request) {
         // 1. Let Spring Security verify the username and password securely against the database
@@ -94,9 +82,14 @@ public class AuthService {
         return response;
     }
 
-    public void changePassword(String username, String newPassword) {
+    public void changePassword(String username, String oldPassword, String newPassword) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+                
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new RuntimeException("รหัสผ่านเดิมไม่ถูกต้อง");
+        }
+        
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setIsFirstLogin(false);
         userRepository.save(user);

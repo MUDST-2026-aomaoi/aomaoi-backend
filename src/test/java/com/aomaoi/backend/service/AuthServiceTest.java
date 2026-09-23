@@ -162,13 +162,14 @@ class AuthServiceTest {
     @Test
     void changePassword_Worker_Success() {
         when(userRepository.findByUsername("worker1")).thenReturn(Optional.of(workerUser));
+        when(passwordEncoder.matches("oldpass", workerUser.getPassword())).thenReturn(true);
         when(passwordEncoder.encode("newpass")).thenReturn("encoded_newpass");
 
         Worker worker = new Worker();
         worker.setStatus("pending");
         when(workerRepository.findByUserUsername("worker1")).thenReturn(Optional.of(worker));
 
-        authService.changePassword("worker1", "newpass");
+        authService.changePassword("worker1", "oldpass", "newpass");
 
         assertEquals("encoded_newpass", workerUser.getPassword());
         assertFalse(workerUser.getIsFirstLogin());
@@ -181,13 +182,14 @@ class AuthServiceTest {
     @Test
     void changePassword_Admin_Success() {
         when(userRepository.findByUsername("admin1")).thenReturn(Optional.of(adminUser));
+        when(passwordEncoder.matches("oldpass", adminUser.getPassword())).thenReturn(true);
         when(passwordEncoder.encode("newpass")).thenReturn("encoded_newpass");
 
         AdminProfile adminProfile = new AdminProfile();
         adminProfile.setStatus("pending");
         when(adminProfileRepository.findByUserUsername("admin1")).thenReturn(Optional.of(adminProfile));
 
-        authService.changePassword("admin1", "newpass");
+        authService.changePassword("admin1", "oldpass", "newpass");
 
         assertEquals("encoded_newpass", adminUser.getPassword());
         assertFalse(adminUser.getIsFirstLogin());
@@ -201,6 +203,6 @@ class AuthServiceTest {
     void changePassword_UserNotFound_ThrowsException() {
         when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> authService.changePassword("unknown", "newpass"));
+        assertThrows(RuntimeException.class, () -> authService.changePassword("unknown", "oldpass", "newpass"));
     }
 }

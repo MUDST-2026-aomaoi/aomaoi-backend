@@ -1,0 +1,62 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-create-work-logs
+      author: aomaoi
+      changes:
+        - createTable:
+            tableName: work_logs
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: worker_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: type
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: work_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rows
+                  type: INT
+              - column:
+                  name: wa_per_row
+                  type: INT
+              - column:
+                  name: furrows
+                  type: INT
+              - column:
+                  name: wa_per_furrow
+                  type: INT
+              - column:
+                  name: days
+                  type: INT
+              - column:
+                  name: daily_rate
+                  type: NUMERIC(38, 2)
+              - column:
+                  name: tanks
+                  type: INT
+              - column:
+                  name: total
+                  type: NUMERIC(38, 2)
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: work_logs
+            baseColumnNames: worker_id
+            constraintName: fk_work_logs_worker
+            referencedTableName: worker
+            referencedColumnNames: id

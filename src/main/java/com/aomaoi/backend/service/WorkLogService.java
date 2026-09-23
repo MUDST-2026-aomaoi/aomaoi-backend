@@ -9,11 +9,21 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * WorkLogService - Business Logic สำหรับจัดการบันทึกผลงาน/ค่าแรง
+ *
+ * รับผิดชอบ:
+ * - ดึงข้อมูลบันทึกงานทั้งหมด (กรองตาม Farm ของ Admin ที่ล็อกอินอยู่)
+ * - เพิ่มบันทึกงานใหม่พร้อมคำนวณค่าแรงอัตโนมัติ
+ * - คำนวณค่าแรงตามประเภทงาน (cutting, planting, watering, spraying)
+ * - สรุปยอดค่าแรงรวมทั้งหมดและรายเดือน
+ */
 @Service
 public class WorkLogService {
 
@@ -29,6 +39,13 @@ public class WorkLogService {
         this.adminProfileRepository = adminProfileRepository;
     }
 
+    /**
+     * ดึงบันทึกงานทั้งหมด (เรียงจากวันที่ล่าสุด)
+     * - ถ้าเป็น Admin: จะเห็นเฉพาะบันทึกงานของคนงานในฟาร์มตัวเอง
+     * - ถ้าเป็น SuperAdmin: จะเห็นทั้งหมด
+     *
+     * @return List ของ Map ที่มีข้อมูล id, type, date, workerId, total และฟิลด์เฉพาะประเภท
+     */
     public List<Map<String, Object>> getAllLogs() {
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         List<WorkLog> logs = workLogRepository.findAllByOrderByWorkDateDescIdDesc();
@@ -46,8 +63,17 @@ public class WorkLogService {
         return logs.stream().map(this::logToMap).collect(Collectors.toList());
     }
 
+    /**
+     * เพิ่มบันทึกงานใหม่
+     * - ตรวจสอบค่าที่ส่งมาว่าไม่ติดลบ
+     * - สำหรับงาน watering: คำนวณจำนวนวันอัตโนมัติจาก startDate/endDate
+     * - คำนวณค่าแรงตามสูตรของแต่ละประเภทงาน
+     * - อัปเดตยอดค่าแรงรวมของฟาร์ม
+     *
+     * @param dto ข้อมูลบันทึกงานจาก Frontend
+     * @return Map ข้อมูลบันทึกงานที่บันทึกสำเร็จ พร้อม id และ total ที่คำนวณแล้ว
+     */
     public Map<String, Object> addLog(WorkLogRequestDTO dto) {
-        // Validate: no negative values
         validatePositive(dto);
 
         Worker worker = workerRepository.findById(Long.parseLong(dto.getWorkerId()))
@@ -63,16 +89,40 @@ public class WorkLogService {
         log.setWaPerRow(dto.getWaPerRow());
         log.setFurrows(dto.getFurrows());
         log.setWaPerFurrow(dto.getWaPerFurrow());
-        log.setDays(dto.getDays());
         log.setDailyRate(dto.getDailyRate());
         log.setTanks(dto.getTanks());
 
-        // Calculate total wage based on type
-        log.setTotal(calculateWage(dto));
+        // สำหรับงานรดน้ำ: คำนวณจำนวนวันจาก startDate/endDate อัตโนมัติ
+        if ("watering".equals(dto.getType())) {
+            if (dto.getStartDate() != null && dto.getEndDate() != null) {
+                LocalDate start = LocalDate.parse(dto.getStartDate());
+                LocalDate end = LocalDate.parse(dto.getEndDate());
+
+                if (end.isBefore(start)) {
+                    throw new RuntimeException("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น");
+                }
+
+                // +1 เพราะนับวันเริ่มต้นด้วย (เช่น 1-3 = 3 วัน ไม่ใช่ 2 วัน)
+                int calculatedDays = (int) ChronoUnit.DAYS.between(start, end) + 1;
+                log.setDays(calculatedDays);
+                log.setStartDate(start);
+                log.setEndDate(end);
+            } else if (dto.getDays() != null) {
+                // Backward compatible: รองรับการส่ง days มาตรงๆ แบบเก่า
+                log.setDays(dto.getDays());
+            } else {
+                throw new RuntimeException("Watering requires startDate/endDate or days");
+            }
+        } else {
+            log.setDays(dto.getDays());
+        }
+
+        // คำนวณค่าแรงตามประเภทงาน
+        log.setTotal(calculateWage(dto, log.getDays()));
 
         WorkLog saved = workLogRepository.save(log);
 
-        // Update the Farm's payroll
+        // อัปเดตยอดค่าแรงรวมของฟาร์ม
         if (worker.getFarmId() != null) {
             com.aomaoi.backend.entity.Farm farm = this.farmRepository.findById(Long.parseLong(worker.getFarmId())).orElse(null);
             if (farm != null) {
@@ -85,7 +135,20 @@ public class WorkLogService {
         return logToMap(saved);
     }
 
-    public BigDecimal calculateWage(WorkLogRequestDTO dto) {
+    /**
+     * คำนวณค่าแรงตามประเภทงาน
+     *
+     * สูตรการคำนวณ:
+     * - cutting: rows × waPerRow × 2 บาท
+     * - planting: furrows × waPerFurrow × 2.5 บาท
+     * - watering: days × dailyRate บาท
+     * - spraying: tanks × 150 บาท
+     *
+     * @param dto ข้อมูลจาก Frontend
+     * @param calculatedDays จำนวนวันที่คำนวณแล้ว (สำหรับ watering)
+     * @return ค่าแรงรวม (BigDecimal)
+     */
+    public BigDecimal calculateWage(WorkLogRequestDTO dto, Integer calculatedDays) {
         return switch (dto.getType()) {
             case "cutting" -> {
                 if (dto.getRows() == null || dto.getWaPerRow() == null)
@@ -98,9 +161,10 @@ public class WorkLogService {
                 yield BigDecimal.valueOf(dto.getFurrows() * dto.getWaPerFurrow() * 2.5);
             }
             case "watering" -> {
-                if (dto.getDays() == null || dto.getDailyRate() == null)
+                int days = calculatedDays != null ? calculatedDays : (dto.getDays() != null ? dto.getDays() : 0);
+                if (days == 0 || dto.getDailyRate() == null)
                     throw new RuntimeException("Watering requires days and dailyRate");
-                yield dto.getDailyRate().multiply(BigDecimal.valueOf(dto.getDays()));
+                yield dto.getDailyRate().multiply(BigDecimal.valueOf(days));
             }
             case "spraying" -> {
                 if (dto.getTanks() == null)
@@ -111,6 +175,10 @@ public class WorkLogService {
         };
     }
 
+    /**
+     * ตรวจสอบว่าค่าตัวเลขทั้งหมดที่ส่งมาต้องไม่ติดลบ
+     * ป้องกันการส่งข้อมูลที่ไม่สมเหตุสมผลจาก Frontend หรือ API
+     */
     private void validatePositive(WorkLogRequestDTO dto) {
         if (dto.getRows() != null && dto.getRows() < 0)
             throw new RuntimeException("rows cannot be negative");
@@ -128,12 +196,20 @@ public class WorkLogService {
             throw new RuntimeException("tanks cannot be negative");
     }
 
+    /**
+     * คำนวณยอดค่าแรงรวมทั้งหมดตั้งแต่เริ่มระบบ
+     * @return ยอดค่าแรงรวมทั้งหมด (BigDecimal)
+     */
     public BigDecimal getTotalAllTime() {
         return workLogRepository.findAll().stream()
                 .map(WorkLog::getTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * คำนวณยอดค่าแรงรวมของเดือนปัจจุบัน
+     * @return ยอดค่าแรงเดือนนี้ (BigDecimal)
+     */
     public BigDecimal getTotalThisMonth() {
         LocalDate startOfMonth = LocalDate.now().withDayOfMonth(1);
         LocalDate today = LocalDate.now();
@@ -142,6 +218,10 @@ public class WorkLogService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * แปลง WorkLog Entity เป็น Map สำหรับส่งกลับ Frontend
+     * รวมฟิลด์เฉพาะประเภทงาน (เช่น rows, tanks, startDate, endDate) เฉพาะที่มีค่า
+     */
     private Map<String, Object> logToMap(WorkLog log) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", String.valueOf(log.getId()));
@@ -150,7 +230,6 @@ public class WorkLogService {
         map.put("workerId", String.valueOf(log.getWorker().getId()));
         map.put("total", log.getTotal().doubleValue());
 
-        // Include type-specific fields
         if (log.getRows() != null) map.put("rows", log.getRows());
         if (log.getWaPerRow() != null) map.put("waPerRow", log.getWaPerRow());
         if (log.getFurrows() != null) map.put("furrows", log.getFurrows());
@@ -158,6 +237,8 @@ public class WorkLogService {
         if (log.getDays() != null) map.put("days", log.getDays());
         if (log.getDailyRate() != null) map.put("dailyRate", log.getDailyRate().doubleValue());
         if (log.getTanks() != null) map.put("tanks", log.getTanks());
+        if (log.getStartDate() != null) map.put("startDate", log.getStartDate().toString());
+        if (log.getEndDate() != null) map.put("endDate", log.getEndDate().toString());
 
         return map;
     }

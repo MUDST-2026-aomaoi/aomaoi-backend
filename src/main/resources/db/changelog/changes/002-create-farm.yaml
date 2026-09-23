@@ -1,0 +1,47 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-create-farm
+      author: aomaoi
+      changes:
+        - createTable:
+            tableName: farm
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: location
+                  type: VARCHAR(255)
+              - column:
+                  name: image
+                  type: TEXT
+              - column:
+                  name: worker_count
+                  type: INT
+                  defaultValueNumeric: 0
+              - column:
+                  name: admin_count
+                  type: INT
+                  defaultValueNumeric: 0
+              - column:
+                  name: monthly_wages
+                  type: DOUBLE
+                  defaultValueNumeric: 0.0
+              - column:
+                  name: total_wages
+                  type: DOUBLE
+                  defaultValueNumeric: 0.0
+              - column:
+                  name: status
+                  type: VARCHAR(255)
+                  defaultValue: "active"
+              - column:
+                  name: joined_date
+                  type: DATE

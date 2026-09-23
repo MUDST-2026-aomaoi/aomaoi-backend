@@ -5,7 +5,7 @@ import com.aomaoi.backend.entity.User;
 import com.aomaoi.backend.entity.Worker;
 import com.aomaoi.backend.repository.UserRepository;
 import com.aomaoi.backend.repository.WorkerRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,22 +13,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class WorkerService {
 
-    @Autowired
-    private WorkerRepository workerRepository;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
-
-    @Autowired
-    private com.aomaoi.backend.repository.FarmRepository farmRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    private final WorkerRepository workerRepository;
+    private final UserRepository userRepository;
+    private final com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
+    private final com.aomaoi.backend.repository.FarmRepository farmRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final AuditLogService auditLogService;
 
     public List<Worker> getAllWorkers() {
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
@@ -78,8 +71,9 @@ public class WorkerService {
 
         // Get currently logged-in user and assign farmId if they are an admin
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = "system";
         if (auth != null && auth.isAuthenticated()) {
-            String currentUsername = auth.getName();
+            currentUsername = auth.getName();
             adminProfileRepository.findByUserUsername(currentUsername).ifPresent(adminProfile -> {
                 worker.setFarmId(adminProfile.getFarmId());
                 if (adminProfile.getFarmId() != null) {
@@ -92,7 +86,9 @@ public class WorkerService {
             });
         }
 
-        return workerRepository.save(worker);
+        Worker savedWorker = workerRepository.save(worker);
+        auditLogService.logAction("CREATE_WORKER", currentUsername, user.getUsername(), "Created new worker account");
+        return savedWorker;
     }
 
     @Transactional
@@ -114,7 +110,11 @@ public class WorkerService {
             userRepository.save(worker.getUser());
         }
 
-        return workerRepository.save(worker);
+        Worker savedWorker = workerRepository.save(worker);
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = auth != null ? auth.getName() : "system";
+        auditLogService.logAction("UPDATE_WORKER", currentUsername, worker.getUser().getUsername(), "Updated worker account details");
+        return savedWorker;
     }
 
     @Transactional
@@ -122,5 +122,30 @@ public class WorkerService {
         Worker worker = getWorkerById(id);
         worker.setStatus("inactive");
         workerRepository.save(worker);
+        
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = auth != null ? auth.getName() : "system";
+        auditLogService.logAction("DELETE_WORKER", currentUsername, worker.getUser().getUsername(), "Deactivated worker account");
+    }
+
+    @Transactional
+    public void resetWorkerPassword(Long workerId, String newPassword, String adminUsername) {
+        Worker worker = getWorkerById(workerId);
+        User user = worker.getUser();
+        
+        // Update to new password provided by admin
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setIsFirstLogin(true); // Force them to change it again
+        worker.setStatus("pending"); // Set status back to pending
+        
+        userRepository.save(user);
+        workerRepository.save(worker);
+        
+        auditLogService.logAction(
+            "RESET_PASSWORD", 
+            adminUsername, 
+            user.getUsername(), 
+            "Reset worker password"
+        );
     }
 }

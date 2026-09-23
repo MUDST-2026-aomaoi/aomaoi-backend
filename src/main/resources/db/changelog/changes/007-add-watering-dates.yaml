@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-add-watering-dates
+      author: aomaoi
+      comment: เพิ่มคอลัมน์ start_date และ end_date สำหรับบันทึกช่วงวันที่รดน้ำ
+      changes:
+        - addColumn:
+            tableName: work_logs
+            columns:
+              - column:
+                  name: start_date
+                  type: DATE
+              - column:
+                  name: end_date
+                  type: DATE

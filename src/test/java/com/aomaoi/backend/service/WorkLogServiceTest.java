@@ -108,7 +108,7 @@ class WorkLogServiceTest {
         dto.setRows(10);
         dto.setWaPerRow(5);
 
-        BigDecimal wage = workLogService.calculateWage(dto);
+        BigDecimal wage = workLogService.calculateWage(dto, dto.getDays());
 
         // 10 * 5 * 2 = 100
         assertEquals(BigDecimal.valueOf(100), wage);
@@ -119,7 +119,7 @@ class WorkLogServiceTest {
         WorkLogRequestDTO dto = new WorkLogRequestDTO();
         dto.setType("cutting");
 
-        assertThrows(RuntimeException.class, () -> workLogService.calculateWage(dto));
+        assertThrows(RuntimeException.class, () -> workLogService.calculateWage(dto, dto.getDays()));
     }
 
     @Test
@@ -129,7 +129,7 @@ class WorkLogServiceTest {
         dto.setFurrows(4);
         dto.setWaPerFurrow(10);
 
-        BigDecimal wage = workLogService.calculateWage(dto);
+        BigDecimal wage = workLogService.calculateWage(dto, dto.getDays());
 
         // 4 * 10 * 2.5 = 100.0
         assertEquals(0, BigDecimal.valueOf(100.0).compareTo(wage));
@@ -140,7 +140,7 @@ class WorkLogServiceTest {
         WorkLogRequestDTO dto = new WorkLogRequestDTO();
         dto.setType("planting");
 
-        assertThrows(RuntimeException.class, () -> workLogService.calculateWage(dto));
+        assertThrows(RuntimeException.class, () -> workLogService.calculateWage(dto, dto.getDays()));
     }
 
     @Test
@@ -150,7 +150,7 @@ class WorkLogServiceTest {
         dto.setDays(3);
         dto.setDailyRate(BigDecimal.valueOf(300));
 
-        BigDecimal wage = workLogService.calculateWage(dto);
+        BigDecimal wage = workLogService.calculateWage(dto, dto.getDays());
 
         // 300 * 3 = 900
         assertEquals(BigDecimal.valueOf(900), wage);
@@ -161,7 +161,7 @@ class WorkLogServiceTest {
         WorkLogRequestDTO dto = new WorkLogRequestDTO();
         dto.setType("watering");
 
-        assertThrows(RuntimeException.class, () -> workLogService.calculateWage(dto));
+        assertThrows(RuntimeException.class, () -> workLogService.calculateWage(dto, dto.getDays()));
     }
 
     @Test
@@ -170,7 +170,7 @@ class WorkLogServiceTest {
         dto.setType("spraying");
         dto.setTanks(2);
 
-        BigDecimal wage = workLogService.calculateWage(dto);
+        BigDecimal wage = workLogService.calculateWage(dto, dto.getDays());
 
         // 2 * 150 = 300
         assertEquals(BigDecimal.valueOf(300), wage);
@@ -181,7 +181,7 @@ class WorkLogServiceTest {
         WorkLogRequestDTO dto = new WorkLogRequestDTO();
         dto.setType("spraying");
 
-        assertThrows(RuntimeException.class, () -> workLogService.calculateWage(dto));
+        assertThrows(RuntimeException.class, () -> workLogService.calculateWage(dto, dto.getDays()));
     }
 
     @Test
@@ -189,7 +189,7 @@ class WorkLogServiceTest {
         WorkLogRequestDTO dto = new WorkLogRequestDTO();
         dto.setType("invalid");
 
-        assertThrows(RuntimeException.class, () -> workLogService.calculateWage(dto));
+        assertThrows(RuntimeException.class, () -> workLogService.calculateWage(dto, dto.getDays()));
     }
 
     @Test

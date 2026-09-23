@@ -69,11 +69,12 @@ class AuthControllerTest {
     @Test
     void changePassword_Success() {
         ChangePasswordRequest request = new ChangePasswordRequest();
+        request.setOldPassword("oldpassword");
         request.setNewPassword("newpassword");
 
         Authentication auth = new UsernamePasswordAuthenticationToken("testuser", "password");
 
-        doNothing().when(authService).changePassword("testuser", "newpassword");
+        doNothing().when(authService).changePassword("testuser", "oldpassword", "newpassword");
 
         ResponseEntity<Map<String, Object>> response = authController.changePassword(request, auth);
 
@@ -81,6 +82,6 @@ class AuthControllerTest {
         assertNotNull(response.getBody());
         assertEquals(true, response.getBody().get("success"));
         assertEquals("Password changed successfully", response.getBody().get("message"));
-        verify(authService).changePassword("testuser", "newpassword");
+        verify(authService).changePassword("testuser", "oldpassword", "newpassword");
     }
 }

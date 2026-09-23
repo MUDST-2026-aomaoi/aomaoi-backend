@@ -3,16 +3,16 @@ package com.aomaoi.backend.service;
 import com.aomaoi.backend.dto.FarmRequestDTO;
 import com.aomaoi.backend.entity.Farm;
 import com.aomaoi.backend.repository.FarmRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class FarmService {
 
-    @Autowired
-    private FarmRepository farmRepository;
+    private final FarmRepository farmRepository;
 
     public List<Farm> getAllFarms() {
         return farmRepository.findAll();

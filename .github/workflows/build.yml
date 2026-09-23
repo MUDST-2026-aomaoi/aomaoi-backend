@@ -12,17 +12,19 @@ jobs:
 
     steps:
     - name: Checkout Repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v4
 
     - name: Set up JDK 21
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'temurin'
         cache: maven
 
     - name: Build and Test with Maven
-      # This command compiles the code and runs any tests to ensure it's not broken
       run: |
         chmod +x mvnw
-        ./mvnw clean package -DskipTests
+        ./mvnw clean package
+
+    - name: Build Docker Image
+      run: docker build . -t aomaoi-backend:latest

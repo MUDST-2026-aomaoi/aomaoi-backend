@@ -41,7 +41,10 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ../aomaoi-frontend
+    build:
+      context: ../aomaoi-frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8081/api
     container_name: aomaoi-frontend
     ports:
       - "80:80"

@@ -82,7 +82,6 @@ public class WorkLogService {
         WorkLog log = new WorkLog();
         log.setWorker(worker);
         log.setType(dto.getType());
-        log.setWorkDate(LocalDate.parse(dto.getDate()));
 
         // Set type-specific fields
         log.setRows(dto.getRows());
@@ -93,6 +92,7 @@ public class WorkLogService {
         log.setTanks(dto.getTanks());
 
         // สำหรับงานรดน้ำ: คำนวณจำนวนวันจาก startDate/endDate อัตโนมัติ
+        // ไม่ใช้ dto.getDate() เพราะฟอร์มรดน้ำไม่มีช่อง "วันที่ทำงาน" แยก (ใช้ startDate แทน)
         if ("watering".equals(dto.getType())) {
             if (dto.getStartDate() != null && dto.getEndDate() != null) {
                 LocalDate start = LocalDate.parse(dto.getStartDate());
@@ -107,14 +107,17 @@ public class WorkLogService {
                 log.setDays(calculatedDays);
                 log.setStartDate(start);
                 log.setEndDate(end);
+                log.setWorkDate(start);
             } else if (dto.getDays() != null) {
                 // Backward compatible: รองรับการส่ง days มาตรงๆ แบบเก่า
                 log.setDays(dto.getDays());
+                log.setWorkDate(dto.getDate() != null ? LocalDate.parse(dto.getDate()) : LocalDate.now());
             } else {
                 throw new RuntimeException("Watering requires startDate/endDate or days");
             }
         } else {
             log.setDays(dto.getDays());
+            log.setWorkDate(LocalDate.parse(dto.getDate()));
         }
 
         // คำนวณค่าแรงตามประเภทงาน

@@ -63,6 +63,9 @@ public class AuthService {
         } else if ("worker".equals(user.getRole())) {
             var workerOpt = workerRepository.findByUserUsername(user.getUsername());
             if (workerOpt.isPresent()) {
+                if ("inactive".equals(workerOpt.get().getStatus())) {
+                    throw new RuntimeException("Worker is inactive");
+                }
                 fullName = workerOpt.get().getFullName();
                 actualId = workerOpt.get().getId();
                 avatar = workerOpt.get().getAvatar();

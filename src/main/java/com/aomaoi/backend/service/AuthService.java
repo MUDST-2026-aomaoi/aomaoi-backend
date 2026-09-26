@@ -56,6 +56,9 @@ public class AuthService {
         } else if ("admin".equals(user.getRole())) {
             var adminOpt = adminProfileRepository.findByUserUsername(user.getUsername());
             if (adminOpt.isPresent()) {
+                if ("inactive".equals(adminOpt.get().getStatus())) {
+                    throw new RuntimeException("Admin is inactive");
+                }
                 fullName = adminOpt.get().getFullName();
                 actualId = adminOpt.get().getId();
                 avatar = adminOpt.get().getAvatar();

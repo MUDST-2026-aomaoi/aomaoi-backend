@@ -131,8 +131,16 @@ public class WorkerService {
     @Transactional
     public void resetWorkerPassword(Long workerId, String newPassword, String adminUsername) {
         Worker worker = getWorkerById(workerId);
+
+        // If the caller is an admin (not superadmin), they may only reset workers in their own farm.
+        adminProfileRepository.findByUserUsername(adminUsername).ifPresent(adminProfile -> {
+            if (!adminProfile.getFarmId().equals(worker.getFarmId())) {
+                throw new org.springframework.security.access.AccessDeniedException("Cannot reset a worker outside your farm");
+            }
+        });
+
         User user = worker.getUser();
-        
+
         // Update to new password provided by admin
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setIsFirstLogin(true); // Force them to change it again

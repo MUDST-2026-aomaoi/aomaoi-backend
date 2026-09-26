@@ -2,6 +2,7 @@ package com.aomaoi.backend.config;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -34,7 +35,21 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/error").permitAll()
-                .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // SuperAdmin only: audit trail, and creating/editing/deleting farms & admins
+                .requestMatchers("/api/superadmin/**").hasRole("SUPERADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/farms").hasRole("SUPERADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/farms/**").hasRole("SUPERADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/farms/**").hasRole("SUPERADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/admins").hasRole("SUPERADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/admins/**").hasRole("SUPERADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/admins/**").hasRole("SUPERADMIN")
+                // Admin (or SuperAdmin): managing workers and recording work logs
+                .requestMatchers(HttpMethod.POST, "/api/workers/*/reset-password").hasAnyRole("ADMIN", "SUPERADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/workers").hasAnyRole("ADMIN", "SUPERADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/workers/**").hasAnyRole("ADMIN", "SUPERADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/workers/**").hasAnyRole("ADMIN", "SUPERADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/work-logs").hasAnyRole("ADMIN", "SUPERADMIN")
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exceptions -> exceptions

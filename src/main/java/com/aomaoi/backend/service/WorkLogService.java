@@ -91,33 +91,46 @@ public class WorkLogService {
         log.setDailyRate(dto.getDailyRate());
         log.setTanks(dto.getTanks());
 
-        // สำหรับงานรดน้ำ: คำนวณจำนวนวันจาก startDate/endDate อัตโนมัติ
-        // ไม่ใช้ dto.getDate() เพราะฟอร์มรดน้ำไม่มีช่อง "วันที่ทำงาน" แยก (ใช้ startDate แทน)
-        if ("watering".equals(dto.getType())) {
-            if (dto.getStartDate() != null && dto.getEndDate() != null) {
-                LocalDate start = LocalDate.parse(dto.getStartDate());
-                LocalDate end = LocalDate.parse(dto.getEndDate());
+        // จัดการวันที่สำหรับทุกประเภทงาน (start date และ end date)
+        // สำหรับงานวันเดียว (เช่น ตัดหญ้า, ตัดอ้อย, ฉีดยา): กำหนดให้ทั้ง start date และ end date เป็นวันเดียวกัน
+        LocalDate start;
+        LocalDate end;
 
-                if (end.isBefore(start)) {
-                    throw new RuntimeException("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น");
-                }
-
-                // +1 เพราะนับวันเริ่มต้นด้วย (เช่น 1-3 = 3 วัน ไม่ใช่ 2 วัน)
-                int calculatedDays = (int) ChronoUnit.DAYS.between(start, end) + 1;
-                log.setDays(calculatedDays);
-                log.setStartDate(start);
-                log.setEndDate(end);
-                log.setWorkDate(start);
-            } else if (dto.getDays() != null) {
-                // Backward compatible: รองรับการส่ง days มาตรงๆ แบบเก่า
-                log.setDays(dto.getDays());
-                log.setWorkDate(dto.getDate() != null ? LocalDate.parse(dto.getDate()) : LocalDate.now());
+        if (dto.getStartDate() != null && !dto.getStartDate().isBlank()) {
+            start = LocalDate.parse(dto.getStartDate());
+            if (dto.getEndDate() != null && !dto.getEndDate().isBlank()) {
+                end = LocalDate.parse(dto.getEndDate());
             } else {
-                throw new RuntimeException("Watering requires startDate/endDate or days");
+                end = start;
             }
+        } else if (dto.getDate() != null && !dto.getDate().isBlank()) {
+            start = LocalDate.parse(dto.getDate());
+            if (dto.getEndDate() != null && !dto.getEndDate().isBlank()) {
+                end = LocalDate.parse(dto.getEndDate());
+            } else {
+                end = start;
+            }
+        } else if (dto.getDays() != null && "watering".equals(dto.getType())) {
+            start = LocalDate.now();
+            end = start.plusDays(Math.max(0, dto.getDays() - 1));
+        } else {
+            throw new RuntimeException("Date (or startDate and endDate) is required");
+        }
+
+        if (end.isBefore(start)) {
+            throw new RuntimeException("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น");
+        }
+
+        log.setStartDate(start);
+        log.setEndDate(end);
+        log.setWorkDate(start);
+
+        // สำหรับงานรดน้ำ: คำนวณจำนวนวันจาก startDate/endDate อัตโนมัติ (+1 วัน เพราะนับวันเริ่มต้นด้วย)
+        if ("watering".equals(dto.getType())) {
+            int calculatedDays = (int) ChronoUnit.DAYS.between(start, end) + 1;
+            log.setDays(calculatedDays);
         } else {
             log.setDays(dto.getDays());
-            log.setWorkDate(LocalDate.parse(dto.getDate()));
         }
 
         // คำนวณค่าแรงตามประเภทงาน
@@ -229,7 +242,10 @@ public class WorkLogService {
         Map<String, Object> map = new HashMap<>();
         map.put("id", String.valueOf(log.getId()));
         map.put("type", log.getType());
-        map.put("date", log.getWorkDate().toString());
+        String dateStr = log.getStartDate() != null ? log.getStartDate().toString() : log.getWorkDate().toString();
+        map.put("date", dateStr);
+        map.put("startDate", dateStr);
+        map.put("endDate", log.getEndDate() != null ? log.getEndDate().toString() : dateStr);
         map.put("workerId", String.valueOf(log.getWorker().getId()));
         map.put("total", log.getTotal().doubleValue());
 
@@ -240,8 +256,6 @@ public class WorkLogService {
         if (log.getDays() != null) map.put("days", log.getDays());
         if (log.getDailyRate() != null) map.put("dailyRate", log.getDailyRate().doubleValue());
         if (log.getTanks() != null) map.put("tanks", log.getTanks());
-        if (log.getStartDate() != null) map.put("startDate", log.getStartDate().toString());
-        if (log.getEndDate() != null) map.put("endDate", log.getEndDate().toString());
 
         return map;
     }

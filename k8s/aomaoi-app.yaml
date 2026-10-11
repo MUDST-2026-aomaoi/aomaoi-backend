@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aomaoi-app-deployment
+  namespace: exercise-2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aomaoi-app
+  template:
+    metadata:
+      labels:
+        app: aomaoi-app
+    spec:
+      containers:
+      - name: aomaoi-app-container
+        value: jdbc:postgresql://host.docker.internal:5434/aomaoi
+        #image: aomaoi-backend-app:latest
+        #imagePullPolicy: IfNotPresent
+        #ports:
+        #- containerPort: 8080

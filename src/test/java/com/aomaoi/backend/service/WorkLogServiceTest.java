@@ -63,6 +63,8 @@ class WorkLogServiceTest {
         workLog.setWorker(worker);
         workLog.setType("cutting");
         workLog.setWorkDate(LocalDate.now());
+        workLog.setStartDate(LocalDate.now());
+        workLog.setEndDate(LocalDate.now());
         workLog.setRows(10);
         workLog.setWaPerRow(5);
         workLog.setTotal(BigDecimal.valueOf(100.0));
@@ -264,4 +266,67 @@ class WorkLogServiceTest {
 
         assertEquals(BigDecimal.valueOf(100.0), total);
     }
+
+    @Test
+    void addLog_SingleDayTask_SetsStartAndEndDateToSameDay() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("cutting");
+        dto.setDate("2026-10-12");
+        dto.setRows(5);
+        dto.setWaPerRow(10);
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
+            WorkLog log = i.getArgument(0);
+            log.setId(101L);
+            return log;
+        });
+
+        Map<String, Object> result = workLogService.addLog(dto);
+
+        assertNotNull(result);
+        assertEquals("2026-10-12", result.get("startDate"));
+        assertEquals("2026-10-12", result.get("endDate"));
+        assertEquals("2026-10-12", result.get("date"));
+    }
+
+    @Test
+    void addLog_MultiDayTask_SetsStartAndEndDateProperly() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("watering");
+        dto.setStartDate("2026-10-10");
+        dto.setEndDate("2026-10-12");
+        dto.setDailyRate(BigDecimal.valueOf(350));
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
+            WorkLog log = i.getArgument(0);
+            log.setId(102L);
+            return log;
+        });
+
+        Map<String, Object> result = workLogService.addLog(dto);
+
+        assertNotNull(result);
+        assertEquals("2026-10-10", result.get("startDate"));
+        assertEquals("2026-10-12", result.get("endDate"));
+        assertEquals(3, result.get("days")); // 10, 11, 12 = 3 days
+    }
+
+    @Test
+    void addLog_EndDateBeforeStartDate_ThrowsException() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("watering");
+        dto.setStartDate("2026-10-15");
+        dto.setEndDate("2026-10-10");
+        dto.setDailyRate(BigDecimal.valueOf(350));
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+
+        assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
+    }
 }
+

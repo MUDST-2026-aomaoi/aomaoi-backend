@@ -13,3 +13,5 @@ databaseChangeLog:
       file: db/changelog/changes/006-create-audit-logs.yaml
   - include:
       file: db/changelog/changes/007-add-watering-dates.yaml
+  - include:
+      file: db/changelog/changes/008-update-work-logs-dates.yaml

@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-update-work-logs-dates
+      author: aomaoi
+      comment: กำหนดค่า start_date และ end_date สำหรับทุกงานเพื่อป้องกันค่า null ในฐานข้อมูล
+      changes:
+        - sql:
+            comment: อัปเดต start_date สำหรับข้อมูลเดิมที่ยังเป็น null ให้เท่ากับ work_date
+            sql: UPDATE work_logs SET start_date = work_date WHERE start_date IS NULL
+        - sql:
+            comment: อัปเดต end_date สำหรับข้อมูลเดิมที่ยังเป็น null ให้เท่ากับ work_date
+            sql: UPDATE work_logs SET end_date = work_date WHERE end_date IS NULL
+        - addNotNullConstraint:
+            tableName: work_logs
+            columnName: start_date
+            columnDataType: DATE
+        - addNotNullConstraint:
+            tableName: work_logs
+            columnName: end_date
+            columnDataType: DATE

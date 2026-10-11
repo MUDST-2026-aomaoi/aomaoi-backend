@@ -33,8 +33,16 @@ public class WorkLog {
     @Column(nullable = false)
     private String type;
 
-    /** วันที่บันทึกงาน (สำหรับงานประเภทอื่นที่ไม่ใช่ watering) */
-    @Column(nullable = false)
+    /** วันที่เริ่มต้นทำงาน (ทุกประเภทงาน) */
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate;
+
+    /** วันที่สิ้นสุดทำงาน (ทุกประเภทงาน, สำหรับงานวันเดียว startDate == endDate) */
+    @Column(name = "end_date", nullable = false)
+    private LocalDate endDate;
+
+    /** วันที่บันทึกงาน (คงไว้เพื่อให้เข้ากันได้กับระบบเดิม) */
+    @Column(name = "work_date", nullable = false)
     private LocalDate workDate;
 
     // === ฟิลด์เฉพาะงานตัดอ้อย (cutting) ===
@@ -54,10 +62,6 @@ public class WorkLog {
     private Integer days;
     /** ค่าแรงต่อวัน (บาท) */
     private BigDecimal dailyRate;
-    /** วันเริ่มต้นรดน้ำ */
-    private LocalDate startDate;
-    /** วันสิ้นสุดรดน้ำ */
-    private LocalDate endDate;
 
     // === ฟิลด์เฉพาะงานฉีดยา (spraying) ===
     /** จำนวนถังยา */

@@ -1,3 +1,5 @@
+name: aomaoi
+
 services:
   app:
     build: .
@@ -12,8 +14,10 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-aomaoi_password}
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     restart: unless-stopped
 
   postgres:
@@ -29,6 +33,11 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-aomaoi_password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-aomaoi_user} -d ${DB_NAME:-aomaoi_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   redis:
@@ -54,4 +63,6 @@ services:
 
 volumes:
   postgres_data:
+    name: aomaoi_postgres_data
   redis_data:
+    name: aomaoi_redis_data

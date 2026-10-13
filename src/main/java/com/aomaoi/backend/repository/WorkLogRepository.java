@@ -17,4 +17,6 @@ public interface WorkLogRepository extends JpaRepository<WorkLog, Long> {
     List<WorkLog> findByWorkerNicknameContainingIgnoreCase(String nickname);
 
     List<WorkLog> findAllByOrderByWorkDateDescIdDesc();
+
+    long countByWorkerIdAndTypeAndWorkDate(Long workerId, String type, LocalDate workDate);
 }

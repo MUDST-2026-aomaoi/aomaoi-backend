@@ -50,6 +50,9 @@ class AuthServiceTest {
     @Mock
     private WorkerRepository workerRepository;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -177,6 +180,7 @@ class AuthServiceTest {
 
         verify(userRepository).save(workerUser);
         verify(workerRepository).save(worker);
+        verify(auditLogService).logAction("CHANGE_PASSWORD", "worker1", "worker1", "User changed own password");
     }
 
     @Test
@@ -197,6 +201,7 @@ class AuthServiceTest {
 
         verify(userRepository).save(adminUser);
         verify(adminProfileRepository).save(adminProfile);
+        verify(auditLogService).logAction("CHANGE_PASSWORD", "admin1", "admin1", "User changed own password");
     }
 
     @Test

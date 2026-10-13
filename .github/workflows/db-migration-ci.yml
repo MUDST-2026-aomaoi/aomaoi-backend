@@ -1,0 +1,51 @@
+name: Database Migration CI Check
+
+on:
+  push:
+    branches: [ "main", "dev" ]
+    paths:
+      - 'liquibase/**'
+      - '.github/workflows/db-migration-ci.yml'
+  pull_request:
+    branches: [ "main", "dev" ]
+    paths:
+      - 'liquibase/**'
+      - '.github/workflows/db-migration-ci.yml'
+
+jobs:
+  validate-and-test-migration:
+    name: Validate and Test Liquibase Migration
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: aomaoi_db
+          POSTGRES_USER: aomaoi_user
+          POSTGRES_PASSWORD: aomaoi_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aomaoi_user -d aomaoi_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Liquibase Migration Test (update-testing-rollback)
+        uses: docker://liquibase/liquibase:4.27-alpine
+        with:
+          args: >-
+            --changelog-file=db.changelog-master.xml
+            --url=jdbc:postgresql://postgres:5432/aomaoi_db
+            --username=aomaoi_user
+            --password=aomaoi_password
+            --search-path=/github/workspace/liquibase
+            update-testing-rollback
+
+      - name: Report Success
+        run: echo " Liquibase Formatted SQL changesets validated and tested rollback successfully!"

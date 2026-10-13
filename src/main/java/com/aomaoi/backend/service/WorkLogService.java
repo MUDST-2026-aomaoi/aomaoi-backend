@@ -121,6 +121,12 @@ public class WorkLogService {
             throw new RuntimeException("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น");
         }
 
+        // ป้องกันไม่ให้มอบหมายงานประเภทเดียวกันให้คนงานคนเดิม 3 ครั้งในวันเดียวกัน
+        long existingTaskCount = workLogRepository.countByWorkerIdAndTypeAndWorkDate(worker.getId(), dto.getType(), start);
+        if (existingTaskCount >= 2) {
+            throw new RuntimeException("ไม่สามารถมอบหมายงานประเภทเดียวกัน (" + dto.getType() + ") ให้คนงานคนเดิม 3 ครั้งในวันเดียวกันได้ (Cannot assign the same task to the same worker three times on the same day)");
+        }
+
         log.setStartDate(start);
         log.setEndDate(end);
         log.setWorkDate(start);

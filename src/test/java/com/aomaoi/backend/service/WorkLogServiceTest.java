@@ -328,5 +328,22 @@ class WorkLogServiceTest {
 
         assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
     }
+
+    @Test
+    void addLog_ThirdSameTaskOnSameDay_ThrowsException() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("watering");
+        dto.setDate("2026-10-12");
+        dto.setDays(1);
+        dto.setDailyRate(BigDecimal.valueOf(350));
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workLogRepository.countByWorkerIdAndTypeAndWorkDate(1L, "watering", LocalDate.parse("2026-10-12")))
+                .thenReturn(2L);
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
+        assertTrue(exception.getMessage().contains("3 ครั้งในวันเดียวกัน") || exception.getMessage().contains("three times"));
+    }
 }
 

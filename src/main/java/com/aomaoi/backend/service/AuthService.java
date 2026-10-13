@@ -25,6 +25,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
     private final com.aomaoi.backend.repository.WorkerRepository workerRepository;
+    private final AuditLogService auditLogService;
 
     public Map<String, Object> login(LoginRequest request) {
         // 1. Let Spring Security verify the username and password securely against the database
@@ -112,6 +113,13 @@ public class AuthService {
                 adminProfileRepository.save(a);
             });
         }
+
+        auditLogService.logAction(
+            "CHANGE_PASSWORD",
+            username,
+            username,
+            "User changed own password"
+        );
     }
 }
 

@@ -31,12 +31,14 @@ public class WorkLogService {
     private final WorkerRepository workerRepository;
     private final com.aomaoi.backend.repository.FarmRepository farmRepository;
     private final com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
+    private final AuditLogService auditLogService;
 
-    public WorkLogService(WorkLogRepository workLogRepository, WorkerRepository workerRepository, com.aomaoi.backend.repository.FarmRepository farmRepository, com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository) {
+    public WorkLogService(WorkLogRepository workLogRepository, WorkerRepository workerRepository, com.aomaoi.backend.repository.FarmRepository farmRepository, com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository, AuditLogService auditLogService) {
         this.workLogRepository = workLogRepository;
         this.workerRepository = workerRepository;
         this.farmRepository = farmRepository;
         this.adminProfileRepository = adminProfileRepository;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -153,6 +155,13 @@ public class WorkLogService {
                 this.farmRepository.save(farm);
             }
         }
+
+        // บันทึกประวัติลง Audit Log ว่า Admin คนไหนเพิ่มงานให้คนงานคนไหน
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = (auth != null && auth.isAuthenticated() && !auth.getName().equals("anonymousUser")) ? auth.getName() : "system";
+        String workerUsername = worker.getUser() != null ? worker.getUser().getUsername() : worker.getFullName();
+        String details = String.format("Added %s work log for %s (Total: %s THB)", saved.getType(), worker.getFullName(), saved.getTotal());
+        this.auditLogService.logAction("CREATE_WORKLOG", currentUsername, workerUsername, details);
 
         return logToMap(saved);
     }

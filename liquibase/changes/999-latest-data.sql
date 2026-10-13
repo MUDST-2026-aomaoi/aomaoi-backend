@@ -27,10 +27,14 @@ SET row_security = off;
 
 INSERT INTO public.users VALUES (5, 'worker3', '$2a$10$dOg7zwVv.OR1VeTCSuSopeYepgo1z3juruXS4TS93s2oCi1xWnfgW', 'worker', false) ON CONFLICT DO NOTHING;
 INSERT INTO public.users VALUES (6, 'admin2', '$2a$10$XYQJxhmtc7U6V5Y2EreoyeTns489iBm93.UHcnEJuyMSstickmboG', 'admin', false) ON CONFLICT DO NOTHING;
-INSERT INTO public.users VALUES (1, 'superadmin', '$2a$10$DB9kOug4gOEPKWOisyZKS.QLEkv1eJ/u.tKgN/kfnfGEA7nqWiYeC', 'superadmin', false) ON CONFLICT DO NOTHING;
-INSERT INTO public.users VALUES (2, 'admin1', '$2a$10$Pc1UujwH4CgKp06MWWyAGuIqgB4Gj.ljinQICskaOSodFoLViYtxO', 'admin', false) ON CONFLICT DO NOTHING;
-INSERT INTO public.users VALUES (3, 'worker1', '$2a$10$tIJOz2EApBXSE484cAEC5e.93.zKx/o50XFXkWIpR4qvK7JH2.Yxm', 'worker', false) ON CONFLICT DO NOTHING;
-INSERT INTO public.users VALUES (4, 'worker2', '$2a$10$MNrRA/qCKgPd2bLIdiE8PupMKoFfYfo.9Rjw.24Eywi5d7IroIfO.', 'worker', false) ON CONFLICT DO NOTHING;
+INSERT INTO public.users VALUES (7, 'admin3', '$2a$10$nfkqR.CIqc8WsPEZ8qTUY.kwhuMN37nGmS.yctrh3LtnH.feoi3v.', 'admin', false) ON CONFLICT DO NOTHING;
+INSERT INTO public.users VALUES (8, 'admin4', '$2a$10$DUTJ.WwVatSXUj17l9CGROilthIMxO1sO70f2AMsGp0F1.wtOaMNe', 'admin', false) ON CONFLICT DO NOTHING;
+INSERT INTO public.users VALUES (9, 'admin5', '$2a$10$v3yn/WsOZTGmcPmkXQGO/erGKXYkBxmtAvqX4bmT0vr17K.yCJuOC', 'admin', false) ON CONFLICT DO NOTHING;
+INSERT INTO public.users VALUES (1, 'superadmin', '$2a$10$e.WSJmZHFspH5wVXYakqTeEtLbo8PLmwbMhXyCoBMjGwRQtpVTvHG', 'superadmin', false) ON CONFLICT DO NOTHING;
+INSERT INTO public.users VALUES (2, 'admin1', '$2a$10$acwzqFcD1eE/OU1JDo/khO9V7CaE33JsFFV4iHHky6nX6B7VWQSZC', 'admin', false) ON CONFLICT DO NOTHING;
+INSERT INTO public.users VALUES (3, 'worker1', '$2a$10$wU895Nz3uR1QpZSV6uBltOg2zmBx1qxWZGKoardAKZXtkCAtzlazG', 'worker', false) ON CONFLICT DO NOTHING;
+INSERT INTO public.users VALUES (4, 'worker2', '$2a$10$LZ0h5RQbKN7Lqu36m8qEIetOzLnjke8LMoDfpX8ECItduEbD7i14i', 'worker', false) ON CONFLICT DO NOTHING;
+INSERT INTO public.users VALUES (10, 'admin6', '$2a$10$9yQ8rywn8hCBsnFKtsNxk.5GTHzREYoVf4gCB6xAKp4R4GikSZjCS', 'admin', false) ON CONFLICT DO NOTHING;
 
 
 --
@@ -39,6 +43,10 @@ INSERT INTO public.users VALUES (4, 'worker2', '$2a$10$MNrRA/qCKgPd2bLIdiE8PupMK
 
 INSERT INTO public.admin_profile VALUES (1, 'สมศักดิ์ รักฟาร์ม', '0812345678', '1', NULL, 'active', '2026-07-13', 2) ON CONFLICT DO NOTHING;
 INSERT INTO public.admin_profile VALUES (2, 'สมสู่ อาชา', '1234567890', '1', NULL, 'active', '2026-10-13', 6) ON CONFLICT DO NOTHING;
+INSERT INTO public.admin_profile VALUES (3, 'สมชา อาสู่', '3216549870', '1', NULL, 'active', '2026-10-13', 7) ON CONFLICT DO NOTHING;
+INSERT INTO public.admin_profile VALUES (4, 'สมรักษ์ คำสร้อย', '3456789012', '1', NULL, 'active', '2026-10-13', 8) ON CONFLICT DO NOTHING;
+INSERT INTO public.admin_profile VALUES (5, 'สมหมาย คลายร้อน', '2034987543', '1', NULL, 'active', '2026-10-13', 9) ON CONFLICT DO NOTHING;
+INSERT INTO public.admin_profile VALUES (6, 'สมปอง ครองใจ', '0239487554', '1', NULL, 'active', '2026-10-13', 10) ON CONFLICT DO NOTHING;
 
 
 --
@@ -51,13 +59,21 @@ INSERT INTO public.audit_logs VALUES (3, 'CREATE_WORKER', 'admin1', 'worker3', '
 INSERT INTO public.audit_logs VALUES (4, 'CHANGE_PASSWORD', 'worker3', 'worker3', '2026-10-13 15:05:10.676985', 'User changed own password') ON CONFLICT DO NOTHING;
 INSERT INTO public.audit_logs VALUES (5, 'CREATE_ADMIN', 'superadmin', 'admin2', '2026-10-13 16:53:44.730082', 'Created new admin account') ON CONFLICT DO NOTHING;
 INSERT INTO public.audit_logs VALUES (6, 'CHANGE_PASSWORD', 'admin2', 'admin2', '2026-10-13 16:54:04.178874', 'User changed own password') ON CONFLICT DO NOTHING;
+INSERT INTO public.audit_logs VALUES (7, 'CREATE_ADMIN', 'superadmin', 'admin3', '2026-10-13 17:16:44.861928', 'Created new admin account') ON CONFLICT DO NOTHING;
+INSERT INTO public.audit_logs VALUES (8, 'CHANGE_PASSWORD', 'admin3', 'admin3', '2026-10-13 17:16:59.418995', 'User changed own password') ON CONFLICT DO NOTHING;
+INSERT INTO public.audit_logs VALUES (9, 'CREATE_ADMIN', 'superadmin', 'admin4', '2026-10-13 17:26:30.347545', 'Created new admin account') ON CONFLICT DO NOTHING;
+INSERT INTO public.audit_logs VALUES (10, 'CHANGE_PASSWORD', 'admin4', 'admin4', '2026-10-13 17:26:53.219807', 'User changed own password') ON CONFLICT DO NOTHING;
+INSERT INTO public.audit_logs VALUES (11, 'CREATE_ADMIN', 'superadmin', 'admin5', '2026-10-13 17:34:42.343415', 'Created new admin account') ON CONFLICT DO NOTHING;
+INSERT INTO public.audit_logs VALUES (12, 'CHANGE_PASSWORD', 'admin5', 'admin5', '2026-10-13 17:35:00.464448', 'User changed own password') ON CONFLICT DO NOTHING;
+INSERT INTO public.audit_logs VALUES (13, 'CREATE_ADMIN', 'superadmin', 'admin6', '2026-10-13 17:43:04.816366', 'Created new admin account') ON CONFLICT DO NOTHING;
+INSERT INTO public.audit_logs VALUES (14, 'CHANGE_PASSWORD', 'admin6', 'admin6', '2026-10-13 17:43:27.322564', 'User changed own password') ON CONFLICT DO NOTHING;
 
 
 --
 -- Data for Name: farm; Type: TABLE DATA; Schema: public; Owner: aomaoi_user
 --
 
-INSERT INTO public.farm VALUES (1, 'ไร่อ้อยอุดมทรัพย์ (Udomsap Sugarcane Farm)', 'กาญจนบุรี (Kanchanaburi)', NULL, 3, 2, 4550, 4550, 'active', '2026-07-13') ON CONFLICT DO NOTHING;
+INSERT INTO public.farm VALUES (1, 'ไร่อ้อยอุดมทรัพย์ (Udomsap Sugarcane Farm)', 'กาญจนบุรี (Kanchanaburi)', NULL, 3, 6, 4550, 4550, 'active', '2026-07-13') ON CONFLICT DO NOTHING;
 
 
 --
@@ -95,14 +111,14 @@ INSERT INTO public.work_logs VALUES (4, 2, 'spraying', '2026-10-12', NULL, NULL,
 -- Name: admin_profile_id_seq; Type: SEQUENCE SET; Schema: public; Owner: aomaoi_user
 --
 
-SELECT pg_catalog.setval('public.admin_profile_id_seq', 2, true);
+SELECT pg_catalog.setval('public.admin_profile_id_seq', 6, true);
 
 
 --
 -- Name: audit_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: aomaoi_user
 --
 
-SELECT pg_catalog.setval('public.audit_logs_id_seq', 6, true);
+SELECT pg_catalog.setval('public.audit_logs_id_seq', 14, true);
 
 
 --
@@ -123,7 +139,7 @@ SELECT pg_catalog.setval('public.farms_id_seq', 1, false);
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: aomaoi_user
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 6, true);
+SELECT pg_catalog.setval('public.users_id_seq', 10, true);
 
 
 --

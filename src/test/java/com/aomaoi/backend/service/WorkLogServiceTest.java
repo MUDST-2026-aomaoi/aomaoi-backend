@@ -45,6 +45,9 @@ class WorkLogServiceTest {
     @Mock
     private AdminProfileRepository adminProfileRepository;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private WorkLogService workLogService;
 
@@ -344,6 +347,27 @@ class WorkLogServiceTest {
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
         assertTrue(exception.getMessage().contains("3 ครั้งในวันเดียวกัน") || exception.getMessage().contains("three times"));
+    }
+
+    @Test
+    void addLog_RecordsAuditLog() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("cutting");
+        dto.setDate("2026-10-12");
+        dto.setRows(5);
+        dto.setWaPerRow(10);
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
+            WorkLog log = i.getArgument(0);
+            log.setId(103L);
+            return log;
+        });
+
+        workLogService.addLog(dto);
+
+        verify(auditLogService).logAction(eq("CREATE_WORKLOG"), anyString(), anyString(), anyString());
     }
 }
 

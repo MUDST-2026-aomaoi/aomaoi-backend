@@ -8,6 +8,7 @@ import java.util.List;
 
 @Repository
 public interface WorkerRepository extends JpaRepository<Worker, Long> {
+    List<Worker> findByFarmId(Long farmId);
     boolean existsByNickname(String nickname);
     List<Worker> findByStatus(String status);
     long countByStatus(String status);

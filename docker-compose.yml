@@ -51,8 +51,9 @@ services:
         condition: service_healthy
     volumes:
       - ./liquibase:/liquibase/changelog
+      - ./src/main/resources:/liquibase/resources:ro
     command:
-      - --search-path=/liquibase/changelog
+      - --search-path=/liquibase/changelog,/liquibase/resources
       - --changelog-file=db.changelog-master.xml
       - --url=jdbc:postgresql://${DB_HOST:-postgres}:${DB_PORT:-5432}/${DB_NAME:-aomaoi_db}
       - --username=${DB_USER:-aomaoi_user}

@@ -60,7 +60,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             adminProfile.setUser(adminUser);
             adminProfile.setFullName("สมศักดิ์ รักฟาร์ม");
             adminProfile.setPhone("0812345678");
-            adminProfile.setFarmId(farm.getId().toString());
+            adminProfile.setFarmId(farm.getId());
             adminProfile.setStatus("active");
             adminProfile.setJoinedDate(java.time.LocalDate.now().minusMonths(3));
             adminProfileRepository.save(adminProfile);
@@ -81,7 +81,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             worker1.setFullName("สมชาย หมายมั่น");
             worker1.setNickname("ชาย");
             worker1.setPhone("0891112222");
-            worker1.setFarmId(farm.getId().toString());
+            worker1.setFarmId(farm.getId());
             worker1.setStatus("active");
             worker1.setJoinedDate(java.time.LocalDate.now().minusMonths(2));
             worker1 = workerRepository.save(worker1);
@@ -102,7 +102,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             worker2.setFullName("สมหญิง ยิ่งเจริญ");
             worker2.setNickname("หญิง");
             worker2.setPhone("0893334444");
-            worker2.setFarmId(farm.getId().toString());
+            worker2.setFarmId(farm.getId());
             worker2.setStatus("active");
             worker2.setJoinedDate(java.time.LocalDate.now().minusMonths(2));
             worker2 = workerRepository.save(worker2);

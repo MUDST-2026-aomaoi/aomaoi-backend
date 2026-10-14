@@ -5,11 +5,15 @@ on:
     branches: [ "main", "dev" ]
     paths:
       - 'liquibase/**'
+      - 'src/main/resources/db/changelog/**'
+      - 'src/test/java/com/aomaoi/backend/migration/**'
       - '.github/workflows/db-migration-ci.yml'
   pull_request:
     branches: [ "main", "dev" ]
     paths:
       - 'liquibase/**'
+      - 'src/main/resources/db/changelog/**'
+      - 'src/test/java/com/aomaoi/backend/migration/**'
       - '.github/workflows/db-migration-ci.yml'
 
 jobs:
@@ -44,8 +48,24 @@ jobs:
             --url=jdbc:postgresql://postgres:5432/aomaoi_db
             --username=aomaoi_user
             --password=aomaoi_password
-            --search-path=/github/workspace/liquibase
+            --search-path=/github/workspace/liquibase,/github/workspace/src/main/resources
             update-testing-rollback
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Test legacy data conversion and snapshot compatibility
+        env:
+          AOMAOI_MIGRATION_TEST_URL: jdbc:postgresql://localhost:5432/aomaoi_db
+          AOMAOI_MIGRATION_TEST_USER: aomaoi_user
+          AOMAOI_MIGRATION_TEST_PASSWORD: aomaoi_password
+        run: |
+          chmod +x mvnw
+          ./mvnw -Dtest=FarmIdMigrationIntegrationTest test
 
       - name: Report Success
         run: echo "Liquibase Formatted SQL changesets validated and tested rollback successfully!"

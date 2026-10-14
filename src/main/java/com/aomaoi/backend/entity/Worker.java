@@ -19,7 +19,7 @@ public class Worker {
     @Column(columnDefinition = "TEXT")
     private String avatar;
     private String status = "active";
-    private String farmId;
+    private Long farmId;
     
     private LocalDate joinedDate;
 

@@ -28,9 +28,8 @@ public class WorkerService {
         if (auth != null && auth.isAuthenticated() && !auth.getName().equals("superadmin") && !auth.getName().equals("anonymousUser")) {
             String currentUsername = auth.getName();
             return adminProfileRepository.findByUserUsername(currentUsername)
-                    .map(adminProfile -> workerRepository.findAll().stream()
-                            .filter(worker -> adminProfile.getFarmId().equals(worker.getFarmId()))
-                            .toList())
+                    .map(adminProfile -> adminProfile.getFarmId() == null
+                            ? List.<Worker>of() : workerRepository.findByFarmId(adminProfile.getFarmId()))
                     .orElseGet(() -> workerRepository.findAll());
         }
         return workerRepository.findAll();
@@ -77,7 +76,7 @@ public class WorkerService {
             adminProfileRepository.findByUserUsername(currentUsername).ifPresent(adminProfile -> {
                 worker.setFarmId(adminProfile.getFarmId());
                 if (adminProfile.getFarmId() != null) {
-                    com.aomaoi.backend.entity.Farm farm = farmRepository.findById(Long.parseLong(adminProfile.getFarmId())).orElse(null);
+                    com.aomaoi.backend.entity.Farm farm = farmRepository.findById(adminProfile.getFarmId()).orElse(null);
                     if (farm != null) {
                         farm.setWorkerCount(farm.getWorkerCount() + 1);
                         farmRepository.save(farm);

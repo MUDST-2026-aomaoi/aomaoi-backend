@@ -240,6 +240,125 @@ class WorkLogServiceTest {
     }
 
     @Test
+    void addLog_NegativeDailyRate_ThrowsException() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("watering");
+        dto.setDailyRate(BigDecimal.valueOf(-10));
+
+        assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
+    }
+
+    @Test
+    void addLog_NegativeFurrows_ThrowsException() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("planting");
+        dto.setFurrows(-1);
+
+        assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
+    }
+
+    @Test
+    void addLog_Watering_DateRange_CalculatesDaysCorrectly() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("watering");
+        dto.setStartDate("2026-10-01");
+        dto.setEndDate("2026-10-03");
+        dto.setDailyRate(BigDecimal.valueOf(300));
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(farmRepository.findById(10L)).thenReturn(Optional.empty());
+        when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
+            WorkLog log = i.getArgument(0);
+            log.setId(101L);
+            return log;
+        });
+
+        Map<String, Object> result = workLogService.addLog(dto);
+
+        assertNotNull(result);
+        assertEquals(3, result.get("days")); // 1st, 2nd, 3rd = 3 days
+        assertEquals(900.0, result.get("total"));
+    }
+
+    @Test
+    void addLog_Watering_EndDateBeforeStartDate_ThrowsException() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("watering");
+        dto.setStartDate("2026-10-05");
+        dto.setEndDate("2026-10-01");
+        dto.setDailyRate(BigDecimal.valueOf(300));
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
+        assertEquals("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น", ex.getMessage());
+    }
+
+    @Test
+    void addLog_Watering_DaysWithoutAnyDate_BackwardCompatible() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("watering");
+        dto.setDays(2);
+        dto.setDailyRate(BigDecimal.valueOf(250));
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(farmRepository.findById(10L)).thenReturn(Optional.empty());
+        when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
+            WorkLog log = i.getArgument(0);
+            log.setId(102L);
+            return log;
+        });
+
+        Map<String, Object> result = workLogService.addLog(dto);
+
+        assertNotNull(result);
+        assertEquals(2, result.get("days"));
+        assertEquals(500.0, result.get("total"));
+    }
+
+    @Test
+    void addLog_Watering_ExplicitDateTakesPrecedenceOverDays() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("watering");
+        dto.setDate("2026-10-01");
+        dto.setDays(2);
+        dto.setDailyRate(BigDecimal.valueOf(250));
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
+            WorkLog log = i.getArgument(0);
+            log.setId(104L);
+            return log;
+        });
+
+        Map<String, Object> result = workLogService.addLog(dto);
+
+        assertEquals("2026-10-01", result.get("startDate"));
+        assertEquals("2026-10-01", result.get("endDate"));
+        assertEquals(1, result.get("days"));
+        assertEquals(250.0, result.get("total"));
+    }
+
+    @Test
+    void addLog_Watering_MissingBothDateRangeAndDays_ThrowsException() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("watering");
+        dto.setDailyRate(BigDecimal.valueOf(300));
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
+        assertEquals("Date (or startDate and endDate) is required", ex.getMessage());
+    }
+
+    @Test
     void addLog_WorkerNotFound_ThrowsException() {
         WorkLogRequestDTO dto = new WorkLogRequestDTO();
         dto.setWorkerId("99");

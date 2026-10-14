@@ -148,6 +148,39 @@ class AdminProfileServiceTest {
     }
 
     @Test
+    void updateAdmin_DuplicateUsername_ThrowsException() {
+        AdminRequestDTO dto = new AdminRequestDTO();
+        dto.setUsername("existinguser");
+
+        when(adminRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.existsByUsername("existinguser")).thenReturn(true);
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> adminProfileService.updateAdmin(1L, dto));
+        assertEquals("Username already exists", ex.getMessage());
+    }
+
+    @Test
+    void addAdmin_FarmNotFound_CreatesAdminWithoutUpdatingFarm() {
+        AdminRequestDTO dto = new AdminRequestDTO();
+        dto.setUsername("admin2");
+        dto.setTempPassword("temp123");
+        dto.setFullName("Admin Two");
+        dto.setFarmId("99");
+
+        when(userRepository.existsByUsername("admin2")).thenReturn(false);
+        when(passwordEncoder.encode("temp123")).thenReturn("encoded_temp");
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+        when(farmRepository.findById(99L)).thenReturn(Optional.empty());
+        when(adminRepository.save(any(AdminProfile.class))).thenAnswer(i -> i.getArgument(0));
+
+        AdminProfile created = adminProfileService.addAdmin(dto);
+
+        assertNotNull(created);
+        assertEquals("Admin Two", created.getFullName());
+        verify(farmRepository, never()).save(any());
+    }
+
+    @Test
     void deleteAdmin_Success() {
         when(adminRepository.findById(1L)).thenReturn(Optional.of(admin));
         when(adminRepository.save(any(AdminProfile.class))).thenAnswer(i -> i.getArgument(0));
@@ -158,3 +191,4 @@ class AdminProfileServiceTest {
         verify(adminRepository).save(admin);
     }
 }
+

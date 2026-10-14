@@ -99,6 +99,22 @@ class FarmServiceTest {
     }
 
     @Test
+    void updateFarm_NullImage_KeepsExistingImage() {
+        FarmRequestDTO dto = new FarmRequestDTO();
+        dto.setName("Updated Farm");
+        dto.setLocation("Phuket");
+        dto.setImage(null);
+
+        when(farmRepository.findById(1L)).thenReturn(Optional.of(farm));
+        when(farmRepository.save(any(Farm.class))).thenAnswer(i -> i.getArgument(0));
+
+        Farm updated = farmService.updateFarm(1L, dto);
+
+        assertEquals("Updated Farm", updated.getName());
+        assertEquals("farm.png", updated.getImage()); // Kept original image
+    }
+
+    @Test
     void deleteFarm_Success() {
         when(farmRepository.findById(1L)).thenReturn(Optional.of(farm));
         when(farmRepository.save(any(Farm.class))).thenAnswer(i -> i.getArgument(0));

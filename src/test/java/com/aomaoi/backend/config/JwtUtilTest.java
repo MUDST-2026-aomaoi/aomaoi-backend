@@ -52,5 +52,17 @@ class JwtUtilTest {
         assertFalse(isValid);
     }
 
-    
+    @Test
+    void testValidateToken_ExpiredToken_ThrowsExpiredJwtException() {
+        JwtUtil expiredJwtUtil = new JwtUtil();
+        ReflectionTestUtils.setField(expiredJwtUtil, "secret", "aomaoi_super_secret_key_for_farm_accounting_system_make_it_long");
+        ReflectionTestUtils.setField(expiredJwtUtil, "expirationTime", -10000L); // Expired in the past
+
+        String expiredToken = expiredJwtUtil.generateToken(userDetails, "ADMIN");
+
+        assertThrows(io.jsonwebtoken.ExpiredJwtException.class, () -> {
+            expiredJwtUtil.validateToken(expiredToken, userDetails);
+        });
+    }
 }
+

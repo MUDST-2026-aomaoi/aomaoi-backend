@@ -18,3 +18,12 @@ databaseChangeLog:
             tableName: work_logs
             columnName: end_date
             columnDataType: DATE
+      rollback:
+        - dropNotNullConstraint:
+            tableName: work_logs
+            columnName: start_date
+            columnDataType: DATE
+        - dropNotNullConstraint:
+            tableName: work_logs
+            columnName: end_date
+            columnDataType: DATE

@@ -4,12 +4,12 @@ on:
   push:
     branches: [ "main", "dev" ]
     paths:
-      - 'liquibase/**'
+      - 'src/main/resources/db/changelog/**'
       - '.github/workflows/db-migration-ci.yml'
   pull_request:
     branches: [ "main", "dev" ]
     paths:
-      - 'liquibase/**'
+      - 'src/main/resources/db/changelog/**'
       - '.github/workflows/db-migration-ci.yml'
 
 jobs:
@@ -40,12 +40,12 @@ jobs:
         uses: docker://liquibase/liquibase:4.27-alpine
         with:
           args: >-
-            --changelog-file=db.changelog-master.xml
+            --changelog-file=db/changelog/db.changelog-master.yaml
             --url=jdbc:postgresql://postgres:5432/aomaoi_db
             --username=aomaoi_user
             --password=aomaoi_password
-            --search-path=/github/workspace/liquibase
+            --search-path=/github/workspace/src/main/resources
             update-testing-rollback
 
       - name: Report Success
-        run: echo " Liquibase Formatted SQL changesets validated and tested rollback successfully!"
+        run: echo "Liquibase changelog validated and tested rollback successfully!"

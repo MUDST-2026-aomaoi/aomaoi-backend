@@ -21,4 +21,18 @@ class GlobalExceptionHandlerTest {
         assertNotNull(response.getBody());
         assertEquals("Error occurred", response.getBody().get("message"));
     }
+
+    @Test
+    void handleAccessDenied() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+        org.springframework.security.access.AccessDeniedException ex =
+                new org.springframework.security.access.AccessDeniedException("Access is denied");
+
+        ResponseEntity<Map<String, String>> response = handler.handleAccessDenied(ex);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Access is denied", response.getBody().get("message"));
+    }
 }
+

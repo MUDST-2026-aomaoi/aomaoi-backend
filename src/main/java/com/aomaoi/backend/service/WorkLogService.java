@@ -50,19 +50,21 @@ public class WorkLogService {
      */
     public List<Map<String, Object>> getAllLogs() {
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        List<WorkLog> logs = workLogRepository.findAllByOrderByWorkDateDescIdDesc();
 
         if (auth != null && auth.isAuthenticated() && !auth.getName().equals("superadmin") && !auth.getName().equals("anonymousUser")) {
             String currentUsername = auth.getName();
             return adminProfileRepository.findByUserUsername(currentUsername)
-                    .map(adminProfile -> logs.stream()
-                            .filter(log -> adminProfile.getFarmId().equals(log.getWorker().getFarmId()))
+                    .map(adminProfile -> (adminProfile.getFarmId() == null
+                            ? List.<WorkLog>of()
+                            : workLogRepository.findByWorkerFarmIdOrderByWorkDateDescIdDesc(adminProfile.getFarmId())).stream()
                             .map(this::logToMap)
                             .collect(Collectors.toList()))
-                    .orElseGet(() -> logs.stream().map(this::logToMap).collect(Collectors.toList()));
+                    .orElseGet(() -> workLogRepository.findAllByOrderByWorkDateDescIdDesc().stream()
+                            .map(this::logToMap).collect(Collectors.toList()));
         }
 
-        return logs.stream().map(this::logToMap).collect(Collectors.toList());
+        return workLogRepository.findAllByOrderByWorkDateDescIdDesc().stream()
+                .map(this::logToMap).collect(Collectors.toList());
     }
 
     /**
@@ -148,7 +150,7 @@ public class WorkLogService {
 
         // อัปเดตยอดค่าแรงรวมของฟาร์ม
         if (worker.getFarmId() != null) {
-            com.aomaoi.backend.entity.Farm farm = this.farmRepository.findById(Long.parseLong(worker.getFarmId())).orElse(null);
+            com.aomaoi.backend.entity.Farm farm = this.farmRepository.findById(worker.getFarmId()).orElse(null);
             if (farm != null) {
                 farm.setTotalWages(farm.getTotalWages() + log.getTotal().doubleValue());
                 farm.setMonthlyWages(farm.getMonthlyWages() + log.getTotal().doubleValue());

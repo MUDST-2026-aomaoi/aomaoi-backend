@@ -57,7 +57,7 @@ class AdminProfileServiceTest {
         admin.setId(1L);
         admin.setFullName("Admin FullName");
         admin.setPhone("0812345678");
-        admin.setFarmId("10");
+        admin.setFarmId(10L);
         admin.setAvatar("avatar.png");
         admin.setStatus("active");
         admin.setUser(user);
@@ -97,7 +97,7 @@ class AdminProfileServiceTest {
         dto.setTempPassword("temp123");
         dto.setFullName("New Admin");
         dto.setPhone("0899999999");
-        dto.setFarmId("10");
+        dto.setFarmId(10L);
         dto.setAvatar("pic.jpg");
 
         Farm farm = new Farm();
@@ -160,24 +160,41 @@ class AdminProfileServiceTest {
     }
 
     @Test
-    void addAdmin_FarmNotFound_CreatesAdminWithoutUpdatingFarm() {
+    void addAdmin_FarmNotFound_RejectsBeforeSavingUser() {
         AdminRequestDTO dto = new AdminRequestDTO();
         dto.setUsername("admin2");
-        dto.setTempPassword("temp123");
-        dto.setFullName("Admin Two");
-        dto.setFarmId("99");
-
-        when(userRepository.existsByUsername("admin2")).thenReturn(false);
-        when(passwordEncoder.encode("temp123")).thenReturn("encoded_temp");
-        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+        dto.setFarmId(99L);
         when(farmRepository.findById(99L)).thenReturn(Optional.empty());
-        when(adminRepository.save(any(AdminProfile.class))).thenAnswer(i -> i.getArgument(0));
 
-        AdminProfile created = adminProfileService.addAdmin(dto);
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> adminProfileService.addAdmin(dto));
 
-        assertNotNull(created);
-        assertEquals("Admin Two", created.getFullName());
+        assertEquals("Farm not found", ex.getMessage());
+        verify(userRepository, never()).save(any());
+        verify(adminRepository, never()).save(any());
         verify(farmRepository, never()).save(any());
+    }
+
+    @Test
+    void addAdmin_MissingFarm_RejectsBeforeSavingUser() {
+        AdminRequestDTO dto = new AdminRequestDTO();
+        dto.setUsername("admin2");
+
+        assertThrows(IllegalArgumentException.class, () -> adminProfileService.addAdmin(dto));
+        verify(userRepository, never()).save(any());
+        verify(adminRepository, never()).save(any());
+    }
+
+    @Test
+    void updateAdmin_UnknownFarm_RejectsChange() {
+        AdminRequestDTO dto = new AdminRequestDTO();
+        dto.setFarmId(99L);
+        when(adminRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(farmRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () -> adminProfileService.updateAdmin(1L, dto));
+        assertEquals(10L, admin.getFarmId());
+        verify(adminRepository, never()).save(any());
     }
 
     @Test

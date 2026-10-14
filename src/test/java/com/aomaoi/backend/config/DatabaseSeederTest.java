@@ -84,14 +84,14 @@ class DatabaseSeederTest {
         ArgumentCaptor<AdminProfile> adminCaptor = ArgumentCaptor.forClass(AdminProfile.class);
         verify(adminProfileRepository).save(adminCaptor.capture());
         assertSame(users.get(1), adminCaptor.getValue().getUser());
-        assertEquals("1", adminCaptor.getValue().getFarmId());
+        assertEquals(1L, adminCaptor.getValue().getFarmId());
 
         ArgumentCaptor<Worker> workerCaptor = ArgumentCaptor.forClass(Worker.class);
         verify(workerRepository, times(2)).save(workerCaptor.capture());
         List<Worker> workers = workerCaptor.getAllValues();
         assertSame(users.get(2), workers.get(0).getUser());
         assertSame(users.get(3), workers.get(1).getUser());
-        workers.forEach(worker -> assertEquals("1", worker.getFarmId()));
+        workers.forEach(worker -> assertEquals(1L, worker.getFarmId()));
 
         ArgumentCaptor<WorkLog> logCaptor = ArgumentCaptor.forClass(WorkLog.class);
         verify(workLogRepository, times(4)).save(logCaptor.capture());

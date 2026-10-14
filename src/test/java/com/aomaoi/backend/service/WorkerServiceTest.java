@@ -67,7 +67,7 @@ class WorkerServiceTest {
         worker.setFullName("Somchai Jaidee");
         worker.setNickname("Chai");
         worker.setPhone("0812345678");
-        worker.setFarmId("10");
+        worker.setFarmId(10L);
         worker.setStatus("active");
         worker.setUser(user);
     }
@@ -93,15 +93,16 @@ class WorkerServiceTest {
         );
 
         AdminProfile adminProfile = new AdminProfile();
-        adminProfile.setFarmId("10");
+        adminProfile.setFarmId(10L);
 
         when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));
-        when(workerRepository.findAll()).thenReturn(List.of(worker));
+        when(workerRepository.findByFarmId(10L)).thenReturn(List.of(worker));
 
         List<Worker> result = workerService.getAllWorkers();
 
         assertEquals(1, result.size());
-        assertEquals("10", result.get(0).getFarmId());
+        verify(workerRepository, never()).findAll();
+        assertEquals(10L, result.get(0).getFarmId());
     }
 
     @Test
@@ -175,7 +176,7 @@ class WorkerServiceTest {
         );
 
         AdminProfile adminProfile = new AdminProfile();
-        adminProfile.setFarmId("5");
+        adminProfile.setFarmId(5L);
 
         Farm farm = new Farm();
         farm.setId(5L);
@@ -194,7 +195,7 @@ class WorkerServiceTest {
 
         Worker created = workerService.addWorker(dto);
 
-        assertEquals("5", created.getFarmId());
+        assertEquals(5L, created.getFarmId());
         assertEquals(3, farm.getWorkerCount());
         verify(farmRepository).save(farm);
     }
@@ -251,7 +252,7 @@ class WorkerServiceTest {
     @Test
     void resetWorkerPassword_AdminSameFarm_Success() {
         AdminProfile adminProfile = new AdminProfile();
-        adminProfile.setFarmId("10");
+        adminProfile.setFarmId(10L);
 
         when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
         when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));
@@ -271,7 +272,7 @@ class WorkerServiceTest {
     @Test
     void resetWorkerPassword_DifferentFarm_ThrowsAccessDeniedException() {
         AdminProfile adminProfile = new AdminProfile();
-        adminProfile.setFarmId("99"); // Different from worker's farmId "10"
+        adminProfile.setFarmId(99L); // Different from worker's farmId "10"
 
         when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
         when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));

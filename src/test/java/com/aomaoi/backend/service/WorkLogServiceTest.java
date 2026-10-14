@@ -59,7 +59,7 @@ class WorkLogServiceTest {
         worker = new Worker();
         worker.setId(1L);
         worker.setFullName("Worker One");
-        worker.setFarmId("10");
+        worker.setFarmId(10L);
 
         workLog = new WorkLog();
         workLog.setId(100L);
@@ -96,14 +96,15 @@ class WorkLogServiceTest {
         );
 
         AdminProfile adminProfile = new AdminProfile();
-        adminProfile.setFarmId("10");
+        adminProfile.setFarmId(10L);
 
         when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));
-        when(workLogRepository.findAllByOrderByWorkDateDescIdDesc()).thenReturn(List.of(workLog));
+        when(workLogRepository.findByWorkerFarmIdOrderByWorkDateDescIdDesc(10L)).thenReturn(List.of(workLog));
 
         List<Map<String, Object>> result = workLogService.getAllLogs();
 
         assertEquals(1, result.size());
+        verify(workLogRepository, never()).findAllByOrderByWorkDateDescIdDesc();
     }
 
     @Test

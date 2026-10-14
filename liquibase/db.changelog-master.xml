@@ -8,6 +8,9 @@
     <!-- นำเข้าไฟล์โครงสร้างตารางเริ่มต้น -->
     <include file="changes/001-create-initial-tables.sql" relativeToChangelogFile="true"/>
 
+    <!-- Shared with Spring Boot's classpath changelog; runs before the data snapshot. -->
+    <include file="db/changelog/changes/009-normalize-farm-ids.sql"/>
+
     <!-- นำเข้าไฟล์ข้อมูลล่าสุดที่ Export มาจากระบบอัตโนมัติ -->
     <include file="changes/999-latest-data.sql" relativeToChangelogFile="true"/>
 

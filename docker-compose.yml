@@ -9,65 +9,7 @@ services:
     env_file:
       - .env
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://${DB_HOST:-postgres}:${DB_PORT:-5432}/${DB_NAME:-aomaoi_db}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER:-aomaoi_user}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-aomaoi_password}
-      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
-      SPRING_LIQUIBASE_ENABLED: "false"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      liquibase:
-        condition: service_completed_successfully
-    restart: unless-stopped
-
-  postgres:
-    image: postgres:15-alpine
-    container_name: aomaoi-postgres
-    ports:
-      - "5434:5432"
-    env_file:
-      - .env
-    environment:
-      POSTGRES_DB: ${DB_NAME:-aomaoi_db}
-      POSTGRES_USER: ${DB_USER:-aomaoi_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-aomaoi_password}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-aomaoi_user} -d ${DB_NAME:-aomaoi_db}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  liquibase:
-    image: liquibase/liquibase:4.27-alpine
-    container_name: aomaoi-liquibase
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./liquibase:/liquibase/changelog
-      - ./src/main/resources:/liquibase/resources:ro
-    command:
-      - --search-path=/liquibase/changelog,/liquibase/resources
-      - --changelog-file=db.changelog-master.xml
-      - --url=jdbc:postgresql://${DB_HOST:-postgres}:${DB_PORT:-5432}/${DB_NAME:-aomaoi_db}
-      - --username=${DB_USER:-aomaoi_user}
-      - --password=${DB_PASSWORD:-aomaoi_password}
-      - update
-    restart: "no"
-
-  redis:
-    image: redis:7-alpine
-    container_name: aomaoi-redis
-    ports:
-      - "6380:6379"
-    volumes:
-      - redis_data:/data
+      SPRING_LIQUIBASE_ENABLED: "true"
     restart: unless-stopped
 
   frontend:
@@ -81,9 +23,3 @@ services:
     depends_on:
       - app
     restart: unless-stopped
-
-volumes:
-  postgres_data:
-    name: aomaoi_postgres_data
-  redis_data:
-    name: aomaoi_redis_data

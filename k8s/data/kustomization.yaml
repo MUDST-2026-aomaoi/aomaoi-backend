@@ -4,5 +4,3 @@ namespace: aomaoi-app
 resources:
   - namespace.yaml
   - configmap.yaml
-  - postgres.yaml
-  - redis.yaml

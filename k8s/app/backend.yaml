@@ -50,15 +50,20 @@ spec:
             - configMapRef:
                 name: aomaoi-backend-config
           env:
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: aomaoi-supabase-db
+                  key: jdbc-url
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: aomaoi-secrets
+                  name: aomaoi-supabase-db
                   key: database-user
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: aomaoi-secrets
+                  name: aomaoi-supabase-db
                   key: database-password
             - name: JWT_SECRET
               valueFrom:

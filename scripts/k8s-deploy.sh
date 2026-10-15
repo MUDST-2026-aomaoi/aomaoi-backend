@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy Postgres (StatefulSet) + Redis + backend to any Kubernetes cluster.
+# Deploy the backend to Kubernetes with its Supabase PostgreSQL database.
 # Works the same on a laptop (Docker Desktop, kind, minikube) and in CI.
 #
 #   scripts/k8s-deploy.sh                                   # image ghcr.io/.../aomaoi-backend:latest
@@ -9,7 +9,8 @@
 #   NAMESPACE        target namespace                          (default: aomaoi-app)
 #   BACKEND_IMAGE    full image reference to deploy            (default: ghcr.io/mudst-2026-aomaoi/aomaoi-backend:latest)
 #   INGRESS_CLASS    IngressClass of your controller           (default: nginx)
-#   DEMO_DATA        true = seed demo users/farm (password 1234), false = only superadmin (default: false)
+#   DEMO_DATA        true = seed demo accounts, false = only superadmin (default: false)
+#   SUPABASE_DB_JDBC_URL, SUPABASE_DB_USER, SUPABASE_DB_PASSWORD
 #   KUBE_CONTEXT     kubectl context to use                    (default: current context)
 #   ROLLOUT_TIMEOUT  seconds to wait per rollout; raise on slow image pulls (default: 600)
 set -euo pipefail
@@ -22,6 +23,14 @@ BACKEND_IMAGE="${BACKEND_IMAGE:-$DEFAULT_IMAGE}"
 INGRESS_CLASS="${INGRESS_CLASS:-nginx}"
 DEMO_DATA="${DEMO_DATA:-false}"
 ROLLOUT_TIMEOUT="${ROLLOUT_TIMEOUT:-600}"
+SUPABASE_DB_JDBC_URL="${SUPABASE_DB_JDBC_URL:-}"
+SUPABASE_DB_USER="${SUPABASE_DB_USER:-}"
+SUPABASE_DB_PASSWORD="${SUPABASE_DB_PASSWORD:-}"
+
+if [ -z "$SUPABASE_DB_JDBC_URL" ] || [ -z "$SUPABASE_DB_USER" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
+  echo "Set SUPABASE_DB_JDBC_URL, SUPABASE_DB_USER, and SUPABASE_DB_PASSWORD before deploying." >&2
+  exit 1
+fi
 
 KUBECTL=(kubectl)
 if [ -n "${KUBE_CONTEXT:-}" ]; then
@@ -60,25 +69,27 @@ random_value() {
 echo "==> Cluster: $(k config current-context)  namespace: $NAMESPACE  image: $BACKEND_IMAGE"
 k cluster-info >/dev/null
 
-echo "==> Namespace, ConfigMap, Postgres, Redis"
+echo "==> Namespace and application configuration"
 k get namespace "$NAMESPACE" >/dev/null 2>&1 || k create namespace "$NAMESPACE"
+
+echo "==> Updating Supabase database connection secret"
+k -n "$NAMESPACE" create secret generic aomaoi-supabase-db \
+  --from-literal=jdbc-url="$SUPABASE_DB_JDBC_URL" \
+  --from-literal=database-user="$SUPABASE_DB_USER" \
+  --from-literal=database-password="$SUPABASE_DB_PASSWORD" \
+  --dry-run=client -o yaml | k apply -f -
 
 # Secrets are never stored in git. Create them once; later deploys keep the existing values
 # (changing the DB password after Postgres initialised would lock the app out).
 if ! k -n "$NAMESPACE" get secret aomaoi-secrets >/dev/null 2>&1; then
   echo "==> Creating Secret aomaoi-secrets with random values"
   k -n "$NAMESPACE" create secret generic aomaoi-secrets \
-    --from-literal=database-user=aomaoi_user \
-    --from-literal=database-password="$(random_value)" \
     --from-literal=jwt-secret="$(random_value)" \
     --from-literal=bootstrap-admin-password="$(random_value)"
 fi
 
 render data | k apply -f -
-k -n "$NAMESPACE" rollout status statefulset/postgres --timeout="${ROLLOUT_TIMEOUT}s"
-k -n "$NAMESPACE" rollout status deployment/redis --timeout="${ROLLOUT_TIMEOUT}s"
-
-echo "==> Database migration + seed (one-off Job)"
+echo "==> Supabase migration + seed (one-off Job)"
 k -n "$NAMESPACE" delete job aomaoi-migrate --ignore-not-found --wait=true
 render migrate | k apply -f -
 deadline=$((SECONDS + 600))

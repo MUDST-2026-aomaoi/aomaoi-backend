@@ -158,9 +158,18 @@ jobs:
           docker load -i /tmp/backend-image.tar
           kind load docker-image "$IMAGE" --name aomaoi
 
-      - name: Deploy (Postgres StatefulSet, Redis, migration Job, backend, Ingress)
+      - name: Start isolated PostgreSQL for the Kubernetes smoke test
+        run: |
+          kubectl create namespace aomaoi-app --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f k8s/ci/postgres.yaml
+          kubectl -n aomaoi-app rollout status deployment/postgres --timeout=180s
+
+      - name: Deploy (migration Job, backend, Ingress)
         env:
           BACKEND_IMAGE: ${{ needs.build.outputs.image }}
+          SUPABASE_DB_JDBC_URL: jdbc:postgresql://postgres:5432/aomaoi_db
+          SUPABASE_DB_USER: aomaoi_user
+          SUPABASE_DB_PASSWORD: aomaoi_password
         run: scripts/k8s-deploy.sh
 
       - name: Smoke test through the Ingress
@@ -169,10 +178,9 @@ jobs:
           sleep 5
           scripts/k8s-smoke.sh
 
-      - name: Database survives Pod deletion (StatefulSet + PVC)
+      - name: Backend recovers after Pod deletion
         run: |
-          kubectl -n aomaoi-app delete pod postgres-0
-          kubectl -n aomaoi-app rollout status statefulset/postgres --timeout=180s
+          kubectl -n aomaoi-app delete pod -l app=aomaoi-backend
           kubectl -n aomaoi-app rollout status deployment/aomaoi-backend --timeout=180s
           scripts/k8s-smoke.sh
 
@@ -185,8 +193,8 @@ jobs:
           kubectl -n aomaoi-app logs job/aomaoi-migrate --all-containers --tail=200 || true
 
   # ========================================================
-  # Stage 4: real deployment. Runs only on main (or manually) and only when the
-  # repository has a KUBE_CONFIG secret, so forks and fresh clones stay green.
+  # Stage 4: real deployment. Runs only on main (or manually) when cluster and
+  # Supabase connection secrets are configured; forks stay green.
   #   Secret   KUBE_CONFIG       base64 of a kubeconfig that can reach the target cluster
   #   Variable KUBE_NAMESPACE    optional, default aomaoi-app
   #   Variable INGRESS_CLASS     optional, default nginx
@@ -233,6 +241,9 @@ jobs:
           BACKEND_IMAGE: ${{ needs.build.outputs.image }}
           NAMESPACE: ${{ vars.KUBE_NAMESPACE || 'aomaoi-app' }}
           INGRESS_CLASS: ${{ vars.INGRESS_CLASS || 'nginx' }}
+          SUPABASE_DB_JDBC_URL: ${{ secrets.SUPABASE_DB_JDBC_URL }}
+          SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: scripts/k8s-deploy.sh
 
       - name: Remove kubeconfig

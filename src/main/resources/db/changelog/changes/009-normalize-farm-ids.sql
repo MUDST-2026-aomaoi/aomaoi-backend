@@ -13,7 +13,7 @@ END $$;
 ALTER TABLE worker ALTER COLUMN farm_id TYPE BIGINT USING btrim(farm_id::text)::bigint;
 ALTER TABLE admin_profile ALTER COLUMN farm_id TYPE BIGINT USING btrim(farm_id::text)::bigint;
 
--- Deferred checks allow the pg_dump snapshot to insert admins before farms within one transaction.
+-- Deferred checks allow related farm records to be inserted within one transaction.
 ALTER TABLE worker ADD CONSTRAINT fk_worker_farm
     FOREIGN KEY (farm_id) REFERENCES farm(id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
 ALTER TABLE admin_profile ADD CONSTRAINT fk_admin_profile_farm

@@ -19,16 +19,6 @@ spec:
       automountServiceAccountToken: false
       imagePullSecrets:
         - name: ghcr-pull
-      initContainers:
-        - name: wait-for-postgres
-          image: postgres:15-alpine
-          command: [sh, -ec, 'until pg_isready -h postgres -p 5432 -U "$POSTGRES_USER" -d aomaoi_db; do sleep 2; done']
-          env:
-            - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: aomaoi-secrets
-                  key: database-user
       containers:
         - name: migrate
           image: ghcr.io/mudst-2026-aomaoi/aomaoi-backend:latest
@@ -43,6 +33,11 @@ spec:
               value: "true"
             - name: APP_MIGRATION_JOB
               value: "true"
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: aomaoi-supabase-db
+                  key: jdbc-url
             - name: BOOTSTRAP_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -51,12 +46,12 @@ spec:
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: aomaoi-secrets
+                  name: aomaoi-supabase-db
                   key: database-user
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: aomaoi-secrets
+                  name: aomaoi-supabase-db
                   key: database-password
             - name: JWT_SECRET
               valueFrom:

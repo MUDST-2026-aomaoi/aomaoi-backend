@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aomaoi-backend-config
+data:
+  SERVER_PORT: "8080"
+  # API is served under /aomaoi-api so the Ingress needs no rewrite.
+  SERVER_SERVLET_CONTEXT_PATH: /aomaoi-api
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/aomaoi_db
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: "6379"
+  # Schema migration and seeding run once in the migration Job, never in API Pods.
+  SPRING_LIQUIBASE_ENABLED: "false"
+  APP_SEED_ENABLED: "false"
+  # false = migration Job creates only `superadmin`; true = full demo data (all demo passwords are 1234).
+  APP_SEED_DEMO_DATA: "false"
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=65.0"
+  LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: INFO
+  SPRING_JPA_SHOW_SQL: "false"

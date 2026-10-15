@@ -5,13 +5,26 @@ import com.aomaoi.backend.entity.Farm;
 import com.aomaoi.backend.repository.UserRepository;
 import com.aomaoi.backend.repository.FarmRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component
+@Order(10)
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class DatabaseSeeder implements CommandLineRunner {
+
+    // Field initializers are the defaults used outside Spring (unit tests); @Value overrides them at runtime.
+    @Value("${app.bootstrap-admin-password:1234}")
+    private String bootstrapAdminPassword = "1234";
+
+    // false = create only the superadmin (never resets an existing one); true = full demo data.
+    @Value("${app.seed.demo-data:true}")
+    private boolean demoData = true;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -23,12 +36,18 @@ public class DatabaseSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         // 1. Super Admin account
+        if (!demoData && userRepository.findByUsername("superadmin").isPresent()) {
+            return;
+        }
         User superAdmin = userRepository.findByUsername("superadmin").orElseGet(User::new);
         superAdmin.setUsername("superadmin");
-        superAdmin.setPassword(passwordEncoder.encode("1234")); 
+        superAdmin.setPassword(passwordEncoder.encode(bootstrapAdminPassword));
         superAdmin.setRole("superadmin");
         superAdmin.setIsFirstLogin(false);
         userRepository.save(superAdmin);
+        if (!demoData) {
+            return;
+        }
 
         // 2. Demo Farm
         Farm farm;

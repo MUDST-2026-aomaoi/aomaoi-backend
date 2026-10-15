@@ -4,122 +4,237 @@ on:
   push:
     branches: [ "main", "dev" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
+  workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
+
+concurrency:
+  group: backend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/aomaoi-backend
+  INGRESS_NGINX_MANIFEST: https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.2/deploy/static/provider/cloud/deploy.yaml
 
 jobs:
   # ========================================================
-  # Stage 1: Test Stage
+  # Stage 1: unit tests + manifest validation
   # ========================================================
   test:
-    name: Run Unit & Integration Tests
+    name: Unit tests and manifest rendering
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up JDK 21
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'temurin'
-        cache: maven
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
 
-    - name: Run Tests with Maven
-      run: |
-        chmod +x mvnw
-        ./mvnw clean test
+      - name: Run tests with Maven
+        run: |
+          chmod +x mvnw
+          ./mvnw clean test -B
+
+      - name: Shell scripts parse
+        run: |
+          bash -n scripts/k8s-deploy.sh
+          bash -n scripts/k8s-smoke.sh
+
+      - name: Render Kubernetes manifests
+        run: |
+          kubectl kustomize k8s > /tmp/aomaoi.yaml
+          kubectl kustomize k8s/migrate > /tmp/aomaoi-migrate.yaml
+          test -s /tmp/aomaoi.yaml
+          test -s /tmp/aomaoi-migrate.yaml
 
   # ========================================================
-  # Stage 2: Build & Push Stage (GitHub Container Registry)
+  # Stage 2: build the image; push to GHCR except on pull requests
   # ========================================================
   build:
-    name: Build & Push Docker Image to GHCR
+    name: Build image
     needs: test
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up JDK 21
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'temurin'
-        cache: maven
+      - name: Image names
+        id: meta
+        env:
+          OWNER: ${{ github.repository_owner }}
+          SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          repo="$REGISTRY/$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')/aomaoi-backend"
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "image=$repo:$SHA" >> "$GITHUB_OUTPUT"
+          # Only the immutable SHA tag is deployed; branch tags are a convenience for humans.
+          branch_tag="$(printf '%s' "$REF_NAME" | tr '/' '-' | tr '[:upper:]' '[:lower:]')"
+          if [ "$REF_NAME" = "main" ]; then branch_tag=latest; fi
+          echo "branch_tag=$repo:$branch_tag" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT" = "pull_request" ]; then echo "push=false" >> "$GITHUB_OUTPUT"; else echo "push=true" >> "$GITHUB_OUTPUT"; fi
 
-    - name: Package JAR with Maven
-      run: |
-        chmod +x mvnw
-        ./mvnw clean package -DskipTests
+      - uses: docker/setup-buildx-action@v3
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        if: steps.meta.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          push: false
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ steps.meta.outputs.branch_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-    - name: Convert repository owner to lowercase for Docker tag
-      id: image_tag
-      run: |
-        IMAGE_LOWER=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-        echo "image_lower=${IMAGE_LOWER}" >> $GITHUB_OUTPUT
+      - name: Push to GHCR (not on pull requests)
+        if: steps.meta.outputs.push == 'true'
+        run: |
+          docker push "${{ steps.meta.outputs.image }}"
+          docker push "${{ steps.meta.outputs.branch_tag }}"
 
-    - name: Build and Push Docker Image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: |
-          ${{ steps.image_tag.outputs.image_lower }}:latest
-          ${{ steps.image_tag.outputs.image_lower }}:${{ github.sha }}
+      - name: Save image for the cluster test
+        run: docker save "${{ steps.meta.outputs.image }}" -o /tmp/backend-image.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-image
+          path: /tmp/backend-image.tar
+          retention-days: 1
 
   # ========================================================
-  # Stage 3: Deploy Stage
+  # Stage 3: prove the manifests work - deploy to a throwaway kind cluster and smoke test.
+  # Needs no secrets and no access to anybody's cluster.
+  # ========================================================
+  deploy-kind:
+    name: Deploy to kind and smoke test
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: aomaoi
+
+      - name: Install ingress-nginx
+        run: |
+          kubectl apply -f "$INGRESS_NGINX_MANIFEST"
+          kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=240s
+          kubectl -n ingress-nginx wait --for=condition=complete job/ingress-nginx-admission-create job/ingress-nginx-admission-patch --timeout=120s
+
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-image
+          path: /tmp
+
+      - name: Load image into kind
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+        run: |
+          docker load -i /tmp/backend-image.tar
+          kind load docker-image "$IMAGE" --name aomaoi
+
+      - name: Deploy (Postgres StatefulSet, Redis, migration Job, backend, Ingress)
+        env:
+          BACKEND_IMAGE: ${{ needs.build.outputs.image }}
+        run: scripts/k8s-deploy.sh
+
+      - name: Smoke test through the Ingress
+        run: |
+          kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 16969:80 >/tmp/port-forward.log 2>&1 &
+          sleep 5
+          scripts/k8s-smoke.sh
+
+      - name: Database survives Pod deletion (StatefulSet + PVC)
+        run: |
+          kubectl -n aomaoi-app delete pod postgres-0
+          kubectl -n aomaoi-app rollout status statefulset/postgres --timeout=180s
+          kubectl -n aomaoi-app rollout status deployment/aomaoi-backend --timeout=180s
+          scripts/k8s-smoke.sh
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get all,ingress,pvc -A || true
+          kubectl -n aomaoi-app describe pods || true
+          kubectl -n aomaoi-app logs -l app=aomaoi-backend --tail=200 --all-containers || true
+          kubectl -n aomaoi-app logs job/aomaoi-migrate --all-containers --tail=200 || true
+
+  # ========================================================
+  # Stage 4: real deployment. Runs only on main (or manually) and only when the
+  # repository has a KUBE_CONFIG secret, so forks and fresh clones stay green.
+  #   Secret   KUBE_CONFIG       base64 of a kubeconfig that can reach the target cluster
+  #   Variable KUBE_NAMESPACE    optional, default aomaoi-app
+  #   Variable INGRESS_CLASS     optional, default nginx
+  #   Variable DEPLOY_RUNNER     optional runner label, default ubuntu-latest (use a self-hosted
+  #                              runner label when the cluster is not reachable from the internet)
+  # The GHCR package must be public, or the cluster needs a `ghcr-pull` pull secret.
   # ========================================================
   deploy:
-    name: Deploy Application
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-
+    name: Deploy to cluster
+    needs: [build, deploy-kind]
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    environment: production
+    concurrency:
+      group: aomaoi-backend-deploy
+      cancel-in-progress: false
+    env:
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Check deployment target
+        id: target
+        run: |
+          if [ -n "$KUBE_CONFIG" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No KUBE_CONFIG secret configured; skipping real deployment (the kind deployment above already passed)."
+          fi
 
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+        if: steps.target.outputs.enabled == 'true'
 
-    - name: Convert repository owner to lowercase for Docker tag
-      id: image_tag
-      run: |
-        IMAGE_LOWER=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-        echo "image_lower=${IMAGE_LOWER}" >> $GITHUB_OUTPUT
+      - name: Configure kubectl
+        if: steps.target.outputs.enabled == 'true'
+        run: |
+          umask 077
+          printf '%s' "$KUBE_CONFIG" | base64 -d > "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
 
-    - name: Pull Latest Docker Image
-      run: |
-        echo "Pulling latest backend image from GitHub Container Registry..."
-        docker pull ${{ steps.image_tag.outputs.image_lower }}:latest
+      - name: Deploy exact image
+        if: steps.target.outputs.enabled == 'true'
+        env:
+          BACKEND_IMAGE: ${{ needs.build.outputs.image }}
+          NAMESPACE: ${{ vars.KUBE_NAMESPACE || 'aomaoi-app' }}
+          INGRESS_CLASS: ${{ vars.INGRESS_CLASS || 'nginx' }}
+        run: scripts/k8s-deploy.sh
 
-    - name: Deploy Container / Services
-      run: |
-        echo "Deploying aomaoi-backend..."
-        echo "Verifying Docker Compose configuration and container deployment..."
-        echo "Deployment completed successfully!"
+      - name: Remove kubeconfig
+        if: always() && steps.target.outputs.enabled == 'true'
+        run: rm -f "$RUNNER_TEMP/kubeconfig"

@@ -11,6 +11,7 @@
 #   INGRESS_CLASS    IngressClass of your controller           (default: nginx)
 #   DEMO_DATA        true = seed demo users/farm (password 1234), false = only superadmin (default: false)
 #   KUBE_CONTEXT     kubectl context to use                    (default: current context)
+#   ROLLOUT_TIMEOUT  seconds to wait per rollout; raise on slow image pulls (default: 600)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -20,6 +21,7 @@ DEFAULT_IMAGE="ghcr.io/mudst-2026-aomaoi/aomaoi-backend:latest"
 BACKEND_IMAGE="${BACKEND_IMAGE:-$DEFAULT_IMAGE}"
 INGRESS_CLASS="${INGRESS_CLASS:-nginx}"
 DEMO_DATA="${DEMO_DATA:-false}"
+ROLLOUT_TIMEOUT="${ROLLOUT_TIMEOUT:-600}"
 
 KUBECTL=(kubectl)
 if [ -n "${KUBE_CONTEXT:-}" ]; then
@@ -73,8 +75,8 @@ if ! k -n "$NAMESPACE" get secret aomaoi-secrets >/dev/null 2>&1; then
 fi
 
 render data | k apply -f -
-k -n "$NAMESPACE" rollout status statefulset/postgres --timeout=300s
-k -n "$NAMESPACE" rollout status deployment/redis --timeout=180s
+k -n "$NAMESPACE" rollout status statefulset/postgres --timeout="${ROLLOUT_TIMEOUT}s"
+k -n "$NAMESPACE" rollout status deployment/redis --timeout="${ROLLOUT_TIMEOUT}s"
 
 echo "==> Database migration + seed (one-off Job)"
 k -n "$NAMESPACE" delete job aomaoi-migrate --ignore-not-found --wait=true
@@ -104,7 +106,7 @@ for attempt in 1 2 3 4 5 6; do
   if [ "$attempt" -eq 6 ]; then echo "Applying app manifests failed." >&2; exit 1; fi
   sleep 10
 done
-if ! k -n "$NAMESPACE" rollout status deployment/aomaoi-backend --timeout=300s; then
+if ! k -n "$NAMESPACE" rollout status deployment/aomaoi-backend --timeout="${ROLLOUT_TIMEOUT}s"; then
   k -n "$NAMESPACE" describe pods -l app=aomaoi-backend >&2 || true
   k -n "$NAMESPACE" logs -l app=aomaoi-backend --tail=80 >&2 || true
   exit 1

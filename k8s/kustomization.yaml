@@ -1,0 +1,6 @@
+# Everything except the one-off migration Job (see ../scripts/k8s-deploy.sh for ordering).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - data
+  - app

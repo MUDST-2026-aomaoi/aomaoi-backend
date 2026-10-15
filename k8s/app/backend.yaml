@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aomaoi-backend
+  labels:
+    app: aomaoi-backend
+spec:
+  selector:
+    app: aomaoi-backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aomaoi-backend
+  labels:
+    app: aomaoi-backend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 300
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: aomaoi-backend
+  template:
+    metadata:
+      labels:
+        app: aomaoi-backend
+    spec:
+      automountServiceAccountToken: false
+      # Optional: only needed when the GHCR package is private. A missing Secret is ignored.
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: backend
+          image: ghcr.io/mudst-2026-aomaoi/aomaoi-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: aomaoi-backend-config
+          env:
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: aomaoi-secrets
+                  key: database-user
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: aomaoi-secrets
+                  key: database-password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: aomaoi-secrets
+                  key: jwt-secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              cpu: "2"
+              memory: 768Mi
+          startupProbe:
+            httpGet:
+              path: /aomaoi-api/actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /aomaoi-api/actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /aomaoi-api/actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6

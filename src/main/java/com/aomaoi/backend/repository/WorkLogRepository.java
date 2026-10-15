@@ -10,6 +10,8 @@ import java.util.List;
 @Repository
 public interface WorkLogRepository extends JpaRepository<WorkLog, Long> {
 
+    List<WorkLog> findByWorkerFarmIdOrderByWorkDateDescIdDesc(Long farmId);
+
     List<WorkLog> findByWorkDateBetween(LocalDate start, LocalDate end);
 
     List<WorkLog> findByWorkerIdAndWorkDateBetween(Long workerId, LocalDate start, LocalDate end);
@@ -17,4 +19,6 @@ public interface WorkLogRepository extends JpaRepository<WorkLog, Long> {
     List<WorkLog> findByWorkerNicknameContainingIgnoreCase(String nickname);
 
     List<WorkLog> findAllByOrderByWorkDateDescIdDesc();
+
+    long countByWorkerIdAndTypeAndWorkDate(Long workerId, String type, LocalDate workDate);
 }

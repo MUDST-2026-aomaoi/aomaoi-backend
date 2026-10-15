@@ -15,7 +15,7 @@ public class AdminProfile {
 
     private String fullName;
     private String phone;
-    private String farmId;
+    private Long farmId;
     @Column(columnDefinition = "TEXT")
     private String avatar;
     private String status = "pending";

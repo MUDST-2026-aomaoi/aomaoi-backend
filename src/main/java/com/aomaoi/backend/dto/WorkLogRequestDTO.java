@@ -18,11 +18,18 @@ public class WorkLogRequestDTO {
     /** ประเภทงาน: cutting, planting, watering, spraying */
     private String type;
 
-    /** วันที่บันทึกงาน (yyyy-MM-dd) - ใช้กับงานที่ไม่ใช่ watering */
+    /** วันที่บันทึกงาน (yyyy-MM-dd) - รองรับงานวันเดียว หรือส่ง startDate/endDate แทนได้ */
     private String date;
 
     /** ID ของคนงาน */
     private String workerId;
+
+    // === ฟิลด์ช่วงวันที่ทำงานสำหรับทุกประเภทงาน ===
+    /** วันเริ่มต้นทำงาน (yyyy-MM-dd) */
+    private String startDate;
+
+    /** วันสิ้นสุดทำงาน (yyyy-MM-dd) - สำหรับงานวันเดียวจะเป็นวันเดียวกับ startDate */
+    private String endDate;
 
     // === ฟิลด์สำหรับงานตัดอ้อย (cutting) ===
     /** จำนวนแถว */
@@ -41,10 +48,6 @@ public class WorkLogRequestDTO {
     private Integer days;
     /** ค่าแรงต่อวัน (บาท) */
     private BigDecimal dailyRate;
-    /** วันเริ่มต้นรดน้ำ (yyyy-MM-dd) */
-    private String startDate;
-    /** วันสิ้นสุดรดน้ำ (yyyy-MM-dd) */
-    private String endDate;
 
     // === ฟิลด์สำหรับงานฉีดยา (spraying) ===
     /** จำนวนถังยา */

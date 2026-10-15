@@ -67,7 +67,7 @@ class WorkerServiceTest {
         worker.setFullName("Somchai Jaidee");
         worker.setNickname("Chai");
         worker.setPhone("0812345678");
-        worker.setFarmId("10");
+        worker.setFarmId(10L);
         worker.setStatus("active");
         worker.setUser(user);
     }
@@ -93,15 +93,16 @@ class WorkerServiceTest {
         );
 
         AdminProfile adminProfile = new AdminProfile();
-        adminProfile.setFarmId("10");
+        adminProfile.setFarmId(10L);
 
         when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));
-        when(workerRepository.findAll()).thenReturn(List.of(worker));
+        when(workerRepository.findByFarmId(10L)).thenReturn(List.of(worker));
 
         List<Worker> result = workerService.getAllWorkers();
 
         assertEquals(1, result.size());
-        assertEquals("10", result.get(0).getFarmId());
+        verify(workerRepository, never()).findAll();
+        assertEquals(10L, result.get(0).getFarmId());
     }
 
     @Test
@@ -175,7 +176,7 @@ class WorkerServiceTest {
         );
 
         AdminProfile adminProfile = new AdminProfile();
-        adminProfile.setFarmId("5");
+        adminProfile.setFarmId(5L);
 
         Farm farm = new Farm();
         farm.setId(5L);
@@ -194,7 +195,7 @@ class WorkerServiceTest {
 
         Worker created = workerService.addWorker(dto);
 
-        assertEquals("5", created.getFarmId());
+        assertEquals(5L, created.getFarmId());
         assertEquals(3, farm.getWorkerCount());
         verify(farmRepository).save(farm);
     }
@@ -217,6 +218,27 @@ class WorkerServiceTest {
     }
 
     @Test
+    void updateWorker_InvalidUsernameWithSpace_ThrowsException() {
+        WorkerRequestDTO dto = new WorkerRequestDTO();
+        dto.setUsername("invalid user");
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+
+        assertThrows(RuntimeException.class, () -> workerService.updateWorker(1L, dto));
+    }
+
+    @Test
+    void updateWorker_DuplicateUsername_ThrowsException() {
+        WorkerRequestDTO dto = new WorkerRequestDTO();
+        dto.setUsername("existinguser");
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(userRepository.existsByUsername("existinguser")).thenReturn(true);
+
+        assertThrows(RuntimeException.class, () -> workerService.updateWorker(1L, dto));
+    }
+
+    @Test
     void deleteWorker_Success() {
         when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
         when(workerRepository.save(any(Worker.class))).thenAnswer(i -> i.getArgument(0));
@@ -226,4 +248,45 @@ class WorkerServiceTest {
         assertEquals("inactive", worker.getStatus());
         verify(workerRepository).save(worker);
     }
+
+    @Test
+    void resetWorkerPassword_AdminSameFarm_Success() {
+        AdminProfile adminProfile = new AdminProfile();
+        adminProfile.setFarmId(10L);
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));
+        when(passwordEncoder.encode("newpass123")).thenReturn("encoded_newpass");
+
+        workerService.resetWorkerPassword(1L, "newpass123", "adminuser");
+
+        assertEquals("encoded_newpass", user.getPassword());
+        assertTrue(user.getIsFirstLogin());
+        assertEquals("pending", worker.getStatus());
+
+        verify(userRepository).save(user);
+        verify(workerRepository).save(worker);
+        verify(auditLogService).logAction("RESET_PASSWORD", "adminuser", "workeruser", "Reset worker password");
+    }
+
+    @Test
+    void resetWorkerPassword_DifferentFarm_ThrowsAccessDeniedException() {
+        AdminProfile adminProfile = new AdminProfile();
+        adminProfile.setFarmId(99L); // Different from worker's farmId "10"
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> workerService.resetWorkerPassword(1L, "newpass123", "adminuser"));
+    }
+
+    @Test
+    void resetWorkerPassword_WorkerNotFound_ThrowsException() {
+        when(workerRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(RuntimeException.class,
+                () -> workerService.resetWorkerPassword(99L, "newpass123", "adminuser"));
+    }
 }
+

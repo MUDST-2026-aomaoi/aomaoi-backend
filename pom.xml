@@ -28,8 +28,16 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<!-- Local-dev defaults for `mvn liquibase:*`; override with -Dliquibase.url=... -Dliquibase.username=... -Dliquibase.password=... -->
+		<liquibase.url>jdbc:postgresql://localhost:5434/aomaoi_db</liquibase.url>
+		<liquibase.username>aomaoi_user</liquibase.username>
+		<liquibase.password>aomaoi_password</liquibase.password>
 	</properties>
 	<dependencies>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
@@ -125,9 +133,9 @@
 				<artifactId>liquibase-maven-plugin</artifactId>
 				<configuration>
 					<changeLogFile>src/main/resources/db/changelog/db.changelog-master.yaml</changeLogFile>
-					<url>jdbc:postgresql://localhost:5434/aomaoi_db</url>
-					<username>aomaoi_user</username>
-					<password>aomaoi_password</password>
+					<url>${liquibase.url}</url>
+					<username>${liquibase.username}</username>
+					<password>${liquibase.password}</password>
 				</configuration>
 			</plugin>
 		</plugins>

@@ -31,12 +31,14 @@ public class WorkLogService {
     private final WorkerRepository workerRepository;
     private final com.aomaoi.backend.repository.FarmRepository farmRepository;
     private final com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
+    private final AuditLogService auditLogService;
 
-    public WorkLogService(WorkLogRepository workLogRepository, WorkerRepository workerRepository, com.aomaoi.backend.repository.FarmRepository farmRepository, com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository) {
+    public WorkLogService(WorkLogRepository workLogRepository, WorkerRepository workerRepository, com.aomaoi.backend.repository.FarmRepository farmRepository, com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository, AuditLogService auditLogService) {
         this.workLogRepository = workLogRepository;
         this.workerRepository = workerRepository;
         this.farmRepository = farmRepository;
         this.adminProfileRepository = adminProfileRepository;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -48,19 +50,21 @@ public class WorkLogService {
      */
     public List<Map<String, Object>> getAllLogs() {
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        List<WorkLog> logs = workLogRepository.findAllByOrderByWorkDateDescIdDesc();
 
         if (auth != null && auth.isAuthenticated() && !auth.getName().equals("superadmin") && !auth.getName().equals("anonymousUser")) {
             String currentUsername = auth.getName();
             return adminProfileRepository.findByUserUsername(currentUsername)
-                    .map(adminProfile -> logs.stream()
-                            .filter(log -> adminProfile.getFarmId().equals(log.getWorker().getFarmId()))
+                    .map(adminProfile -> (adminProfile.getFarmId() == null
+                            ? List.<WorkLog>of()
+                            : workLogRepository.findByWorkerFarmIdOrderByWorkDateDescIdDesc(adminProfile.getFarmId())).stream()
                             .map(this::logToMap)
                             .collect(Collectors.toList()))
-                    .orElseGet(() -> logs.stream().map(this::logToMap).collect(Collectors.toList()));
+                    .orElseGet(() -> workLogRepository.findAllByOrderByWorkDateDescIdDesc().stream()
+                            .map(this::logToMap).collect(Collectors.toList()));
         }
 
-        return logs.stream().map(this::logToMap).collect(Collectors.toList());
+        return workLogRepository.findAllByOrderByWorkDateDescIdDesc().stream()
+                .map(this::logToMap).collect(Collectors.toList());
     }
 
     /**
@@ -91,33 +95,52 @@ public class WorkLogService {
         log.setDailyRate(dto.getDailyRate());
         log.setTanks(dto.getTanks());
 
-        // สำหรับงานรดน้ำ: คำนวณจำนวนวันจาก startDate/endDate อัตโนมัติ
-        // ไม่ใช้ dto.getDate() เพราะฟอร์มรดน้ำไม่มีช่อง "วันที่ทำงาน" แยก (ใช้ startDate แทน)
-        if ("watering".equals(dto.getType())) {
-            if (dto.getStartDate() != null && dto.getEndDate() != null) {
-                LocalDate start = LocalDate.parse(dto.getStartDate());
-                LocalDate end = LocalDate.parse(dto.getEndDate());
+        // จัดการวันที่สำหรับทุกประเภทงาน (start date และ end date)
+        // สำหรับงานวันเดียว (เช่น ตัดหญ้า, ตัดอ้อย, ฉีดยา): กำหนดให้ทั้ง start date และ end date เป็นวันเดียวกัน
+        LocalDate start;
+        LocalDate end;
 
-                if (end.isBefore(start)) {
-                    throw new RuntimeException("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น");
-                }
-
-                // +1 เพราะนับวันเริ่มต้นด้วย (เช่น 1-3 = 3 วัน ไม่ใช่ 2 วัน)
-                int calculatedDays = (int) ChronoUnit.DAYS.between(start, end) + 1;
-                log.setDays(calculatedDays);
-                log.setStartDate(start);
-                log.setEndDate(end);
-                log.setWorkDate(start);
-            } else if (dto.getDays() != null) {
-                // Backward compatible: รองรับการส่ง days มาตรงๆ แบบเก่า
-                log.setDays(dto.getDays());
-                log.setWorkDate(dto.getDate() != null ? LocalDate.parse(dto.getDate()) : LocalDate.now());
+        if (dto.getStartDate() != null && !dto.getStartDate().isBlank()) {
+            start = LocalDate.parse(dto.getStartDate());
+            if (dto.getEndDate() != null && !dto.getEndDate().isBlank()) {
+                end = LocalDate.parse(dto.getEndDate());
             } else {
-                throw new RuntimeException("Watering requires startDate/endDate or days");
+                end = start;
             }
+        } else if (dto.getDate() != null && !dto.getDate().isBlank()) {
+            start = LocalDate.parse(dto.getDate());
+            if (dto.getEndDate() != null && !dto.getEndDate().isBlank()) {
+                end = LocalDate.parse(dto.getEndDate());
+            } else {
+                end = start;
+            }
+        } else if (dto.getDays() != null && "watering".equals(dto.getType())) {
+            start = LocalDate.now();
+            end = start.plusDays(Math.max(0, dto.getDays() - 1));
+        } else {
+            throw new RuntimeException("Date (or startDate and endDate) is required");
+        }
+
+        if (end.isBefore(start)) {
+            throw new RuntimeException("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น");
+        }
+
+        // ป้องกันไม่ให้มอบหมายงานประเภทเดียวกันให้คนงานคนเดิม 3 ครั้งในวันเดียวกัน
+        long existingTaskCount = workLogRepository.countByWorkerIdAndTypeAndWorkDate(worker.getId(), dto.getType(), start);
+        if (existingTaskCount >= 2) {
+            throw new RuntimeException("ไม่สามารถมอบหมายงานประเภทเดียวกัน (" + dto.getType() + ") ให้คนงานคนเดิม 3 ครั้งในวันเดียวกันได้ (Cannot assign the same task to the same worker three times on the same day)");
+        }
+
+        log.setStartDate(start);
+        log.setEndDate(end);
+        log.setWorkDate(start);
+
+        // สำหรับงานรดน้ำ: คำนวณจำนวนวันจาก startDate/endDate อัตโนมัติ (+1 วัน เพราะนับวันเริ่มต้นด้วย)
+        if ("watering".equals(dto.getType())) {
+            int calculatedDays = (int) ChronoUnit.DAYS.between(start, end) + 1;
+            log.setDays(calculatedDays);
         } else {
             log.setDays(dto.getDays());
-            log.setWorkDate(LocalDate.parse(dto.getDate()));
         }
 
         // คำนวณค่าแรงตามประเภทงาน
@@ -127,13 +150,20 @@ public class WorkLogService {
 
         // อัปเดตยอดค่าแรงรวมของฟาร์ม
         if (worker.getFarmId() != null) {
-            com.aomaoi.backend.entity.Farm farm = this.farmRepository.findById(Long.parseLong(worker.getFarmId())).orElse(null);
+            com.aomaoi.backend.entity.Farm farm = this.farmRepository.findById(worker.getFarmId()).orElse(null);
             if (farm != null) {
                 farm.setTotalWages(farm.getTotalWages() + log.getTotal().doubleValue());
                 farm.setMonthlyWages(farm.getMonthlyWages() + log.getTotal().doubleValue());
                 this.farmRepository.save(farm);
             }
         }
+
+        // บันทึกประวัติลง Audit Log ว่า Admin คนไหนเพิ่มงานให้คนงานคนไหน
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = (auth != null && auth.isAuthenticated() && !auth.getName().equals("anonymousUser")) ? auth.getName() : "system";
+        String workerUsername = worker.getUser() != null ? worker.getUser().getUsername() : worker.getFullName();
+        String details = String.format("Added %s work log for %s (Total: %s THB)", saved.getType(), worker.getFullName(), saved.getTotal());
+        this.auditLogService.logAction("CREATE_WORKLOG", currentUsername, workerUsername, details);
 
         return logToMap(saved);
     }
@@ -229,7 +259,10 @@ public class WorkLogService {
         Map<String, Object> map = new HashMap<>();
         map.put("id", String.valueOf(log.getId()));
         map.put("type", log.getType());
-        map.put("date", log.getWorkDate().toString());
+        String dateStr = log.getStartDate() != null ? log.getStartDate().toString() : log.getWorkDate().toString();
+        map.put("date", dateStr);
+        map.put("startDate", dateStr);
+        map.put("endDate", log.getEndDate() != null ? log.getEndDate().toString() : dateStr);
         map.put("workerId", String.valueOf(log.getWorker().getId()));
         map.put("total", log.getTotal().doubleValue());
 
@@ -240,8 +273,6 @@ public class WorkLogService {
         if (log.getDays() != null) map.put("days", log.getDays());
         if (log.getDailyRate() != null) map.put("dailyRate", log.getDailyRate().doubleValue());
         if (log.getTanks() != null) map.put("tanks", log.getTanks());
-        if (log.getStartDate() != null) map.put("startDate", log.getStartDate().toString());
-        if (log.getEndDate() != null) map.put("endDate", log.getEndDate().toString());
 
         return map;
     }

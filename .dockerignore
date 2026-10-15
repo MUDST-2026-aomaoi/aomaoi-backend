@@ -1,0 +1,12 @@
+# Only Maven wrapper, build descriptor and application/test sources enter the build.
+**
+!.mvn/
+!.mvn/**
+!mvnw
+!mvnw.cmd
+!pom.xml
+!src/
+!src/**
+src/**/.env*
+src/**/*.pem
+src/**/*.key

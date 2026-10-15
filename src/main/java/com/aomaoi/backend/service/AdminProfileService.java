@@ -36,6 +36,8 @@ public class AdminProfileService {
             throw new RuntimeException("Username already exists");
         }
 
+        com.aomaoi.backend.entity.Farm farm = requireFarm(dto.getFarmId());
+
         User user = new User();
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getTempPassword()));
@@ -51,13 +53,8 @@ public class AdminProfileService {
         admin.setStatus("pending");
         admin.setUser(user);
 
-        if (dto.getFarmId() != null) {
-            com.aomaoi.backend.entity.Farm farm = farmRepository.findById(Long.parseLong(dto.getFarmId())).orElse(null);
-            if (farm != null) {
-                farm.setAdminCount(farm.getAdminCount() + 1);
-                farmRepository.save(farm);
-            }
-        }
+        farm.setAdminCount(farm.getAdminCount() + 1);
+        farmRepository.save(farm);
 
         AdminProfile savedAdmin = adminRepository.save(admin);
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
@@ -71,7 +68,10 @@ public class AdminProfileService {
         AdminProfile admin = getAdminById(id);
         admin.setFullName(dto.getFullName());
         admin.setPhone(dto.getPhone());
-        admin.setFarmId(dto.getFarmId());
+        if (dto.getFarmId() != null) {
+            requireFarm(dto.getFarmId());
+            admin.setFarmId(dto.getFarmId());
+        }
         admin.setAvatar(dto.getAvatar());
 
         if (dto.getUsername() != null && !dto.getUsername().equals(admin.getUser().getUsername())) {
@@ -98,5 +98,13 @@ public class AdminProfileService {
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         String currentUsername = auth != null ? auth.getName() : "system";
         auditLogService.logAction("DELETE_ADMIN", currentUsername, admin.getUser().getUsername(), "Deactivated admin account");
+    }
+
+    private com.aomaoi.backend.entity.Farm requireFarm(Long farmId) {
+        if (farmId == null || farmId <= 0) {
+            throw new IllegalArgumentException("A positive farmId is required");
+        }
+        return farmRepository.findById(farmId)
+                .orElseThrow(() -> new IllegalArgumentException("Farm not found"));
     }
 }

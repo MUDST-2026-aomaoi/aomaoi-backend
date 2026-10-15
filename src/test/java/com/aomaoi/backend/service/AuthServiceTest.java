@@ -50,6 +50,9 @@ class AuthServiceTest {
     @Mock
     private WorkerRepository workerRepository;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -177,6 +180,7 @@ class AuthServiceTest {
 
         verify(userRepository).save(workerUser);
         verify(workerRepository).save(worker);
+        verify(auditLogService).logAction("CHANGE_PASSWORD", "worker1", "worker1", "User changed own password");
     }
 
     @Test
@@ -197,6 +201,7 @@ class AuthServiceTest {
 
         verify(userRepository).save(adminUser);
         verify(adminProfileRepository).save(adminProfile);
+        verify(auditLogService).logAction("CHANGE_PASSWORD", "admin1", "admin1", "User changed own password");
     }
 
     @Test
@@ -205,4 +210,68 @@ class AuthServiceTest {
 
         assertThrows(RuntimeException.class, () -> authService.changePassword("unknown", "oldpass", "newpass"));
     }
+
+    @Test
+    void changePassword_WrongOldPassword_ThrowsException() {
+        when(userRepository.findByUsername("admin1")).thenReturn(Optional.of(adminUser));
+        when(passwordEncoder.matches("wrongpass", adminUser.getPassword())).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> authService.changePassword("admin1", "wrongpass", "newpass"));
+        assertEquals("รหัสผ่านเดิมไม่ถูกต้อง", ex.getMessage());
+    }
+
+    @Test
+    void changePassword_Superadmin_Success() {
+        when(userRepository.findByUsername("superadmin")).thenReturn(Optional.of(superadminUser));
+        when(passwordEncoder.matches("oldpass", superadminUser.getPassword())).thenReturn(true);
+        when(passwordEncoder.encode("newpass")).thenReturn("encoded_newpass");
+
+        authService.changePassword("superadmin", "oldpass", "newpass");
+
+        assertEquals("encoded_newpass", superadminUser.getPassword());
+        assertFalse(superadminUser.getIsFirstLogin());
+        verify(userRepository).save(superadminUser);
+        verify(workerRepository, never()).save(any());
+        verify(adminProfileRepository, never()).save(any());
+    }
+
+    @Test
+    void login_AdminInactive_ThrowsException() {
+        LoginRequest request = new LoginRequest();
+        request.setUsername("admin1");
+        request.setPassword("pass");
+
+        AdminProfile profile = new AdminProfile();
+        profile.setId(10L);
+        profile.setStatus("inactive");
+
+        when(userDetailsService.loadUserByUsername("admin1")).thenReturn(userDetails);
+        when(userRepository.findByUsername("admin1")).thenReturn(Optional.of(adminUser));
+        when(jwtUtil.generateToken(any(), eq("admin"))).thenReturn("mock_token");
+        when(adminProfileRepository.findByUserUsername("admin1")).thenReturn(Optional.of(profile));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.login(request));
+        assertEquals("Admin is inactive", ex.getMessage());
+    }
+
+    @Test
+    void login_WorkerInactive_ThrowsException() {
+        LoginRequest request = new LoginRequest();
+        request.setUsername("worker1");
+        request.setPassword("pass");
+
+        Worker worker = new Worker();
+        worker.setId(20L);
+        worker.setStatus("inactive");
+
+        when(userDetailsService.loadUserByUsername("worker1")).thenReturn(userDetails);
+        when(userRepository.findByUsername("worker1")).thenReturn(Optional.of(workerUser));
+        when(jwtUtil.generateToken(any(), eq("worker"))).thenReturn("mock_token");
+        when(workerRepository.findByUserUsername("worker1")).thenReturn(Optional.of(worker));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.login(request));
+        assertEquals("Worker is inactive", ex.getMessage());
+    }
 }
+

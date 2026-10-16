@@ -45,6 +45,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${DB_USER:-aomaoi_user}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-aomaoi_password}
       SPRING_LIQUIBASE_ENABLED: "true"
+      SPRING_LIQUIBASE_CONTEXTS: demo
       APP_MIGRATION_JOB: "true"
       APP_SEED_ENABLED: "true"
     depends_on:

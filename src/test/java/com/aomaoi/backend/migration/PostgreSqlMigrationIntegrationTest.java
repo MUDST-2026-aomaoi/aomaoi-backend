@@ -85,6 +85,20 @@ class PostgreSqlMigrationIntegrationTest {
     }
 
     @Test
+    void demoContextSeedsExpectedAccountsAndFarms() throws Exception {
+        liquibase().update(new Contexts("demo"), new LabelExpression());
+
+        assertEquals("26", scalar("SELECT count(*) FROM users"));
+        assertEquals("1", scalar("SELECT count(*) FROM users WHERE role = 'superadmin'"));
+        assertEquals("5", scalar("SELECT count(*) FROM users WHERE role = 'admin'"));
+        assertEquals("20", scalar("SELECT count(*) FROM users WHERE role = 'worker'"));
+        assertEquals("5", scalar("SELECT count(*) FROM farm"));
+        assertEquals("5", scalar("SELECT count(*) FROM admin_profile"));
+        assertEquals("20", scalar("SELECT count(*) FROM worker"));
+        assertEquals("20", scalar("SELECT count(*) FROM users WHERE is_first_login"));
+    }
+
+    @Test
     void liquibaseRollbackRemovesSchemaAndAllowsRecreation() throws Exception {
         Liquibase liquibase = liquibase();
         liquibase.update(new Contexts(), new LabelExpression());

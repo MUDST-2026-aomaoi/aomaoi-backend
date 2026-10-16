@@ -98,7 +98,7 @@ class PostgreSqlMigrationIntegrationTest {
         assertEquals("0", scalar("SELECT count(*) FROM farm WHERE name LIKE '%(ตัวอย่าง)'"));
         assertEquals("5", scalar("SELECT count(*) FROM admin_profile"));
         assertEquals("20", scalar("SELECT count(*) FROM worker"));
-        assertEquals("20", scalar("SELECT count(*) FROM users WHERE is_first_login"));
+        assertEquals("25", scalar("SELECT count(*) FROM users WHERE is_first_login"));
     }
 
     @Test

@@ -15,7 +15,7 @@ Hibernate uses `ddl-auto=validate` to check mappings after Liquibase runs.
 ```bash
 cp .env.example .env
 # Set DB_PASSWORD, JWT_SECRET, and BOOTSTRAP_ADMIN_PASSWORD in .env.
-docker compose up --build -d postgres migrate app
+docker compose up --build -d
 docker compose logs migrate
 ```
 
@@ -23,10 +23,14 @@ PostgreSQL is exposed at `localhost:5434` by default. The API is at
 `http://localhost:8081`. The `migrate` service waits for PostgreSQL to become
 healthy, runs the changelog, bootstraps the initial superadmin, and exits. The API
 waits for that service to succeed, then starts with schema validation enabled.
-Start the optional frontend with `docker compose up -d frontend` when the sibling
-frontend repository is available.
+The frontend is at `http://localhost:3000`. This command also starts an isolated
+E2E database (`aomaoi_test`), backend (`http://localhost:8082`), and frontend
+(`http://localhost:3001`) when the sibling frontend repository is available.
+Run Cypress from the frontend repository against port 3001.
 
 Data lives in the named volume `aomaoi_postgres_data` across container restarts.
+Use `docker compose down` to stop the stack without deleting that volume;
+`docker compose down -v` deletes the regular database as well.
 For later schema changes, rebuild and rerun `docker compose up --build -d migrate app`.
 Liquibase records completed changesets in `databasechangelog` and applies only new
 ones. PostgreSQL initialization variables apply when its volume is first created;

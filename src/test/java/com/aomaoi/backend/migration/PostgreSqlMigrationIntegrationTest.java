@@ -93,6 +93,8 @@ class PostgreSqlMigrationIntegrationTest {
         assertEquals("5", scalar("SELECT count(*) FROM users WHERE role = 'admin'"));
         assertEquals("20", scalar("SELECT count(*) FROM users WHERE role = 'worker'"));
         assertEquals("5", scalar("SELECT count(*) FROM farm"));
+        assertEquals("5", scalar("SELECT count(*) FROM farm WHERE name IN ('ฟาร์มเพื่อพ่อ', 'ไร่สุขใจ', 'ไร่แสงทอง', 'ฟาร์มอ้อยบ้านสวน', 'ไร่พอเพียง')"));
+        assertEquals("0", scalar("SELECT count(*) FROM farm WHERE name LIKE '%(ตัวอย่าง)'"));
         assertEquals("5", scalar("SELECT count(*) FROM admin_profile"));
         assertEquals("20", scalar("SELECT count(*) FROM worker"));
         assertEquals("20", scalar("SELECT count(*) FROM users WHERE is_first_login"));
@@ -106,7 +108,7 @@ class PostgreSqlMigrationIntegrationTest {
         liquibase().update(new Contexts("demo"), new LabelExpression());
 
         assertEquals("5", scalar("SELECT count(*) FROM farm"));
-        assertEquals("1", scalar("SELECT count(*) FROM farm WHERE name = 'ฟาร์มเพื่อพ่อ (ตัวอย่าง)'"));
+        assertEquals("1", scalar("SELECT count(*) FROM farm WHERE name = 'ฟาร์มเพื่อพ่อ'"));
         assertEquals("5", scalar("SELECT count(*) FROM admin_profile"));
         assertEquals("20", scalar("SELECT count(*) FROM worker"));
     }

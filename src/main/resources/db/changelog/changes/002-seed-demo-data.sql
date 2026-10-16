@@ -36,12 +36,15 @@ VALUES
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO farm (name, location, status, worker_count, admin_count, monthly_wages, total_wages, joined_date)
-VALUES
-    ('ฟาร์มเพื่อพ่อ (ตัวอย่าง)', 'ชลบุรี', 'active', 4, 1, 0, 0, CURRENT_DATE),
-    ('ไร่สุขใจ (ตัวอย่าง)', 'นครราชสีมา', 'active', 4, 1, 0, 0, CURRENT_DATE),
-    ('ไร่แสงทอง (ตัวอย่าง)', 'กาญจนบุรี', 'active', 4, 1, 0, 0, CURRENT_DATE),
-    ('ฟาร์มอ้อยบ้านสวน (ตัวอย่าง)', 'สุพรรณบุรี', 'active', 4, 1, 0, 0, CURRENT_DATE),
-    ('ไร่พอเพียง (ตัวอย่าง)', 'ขอนแก่น', 'active', 4, 1, 0, 0, CURRENT_DATE);
+SELECT seed.name, seed.location, 'active', 4, 1, 0, 0, CURRENT_DATE
+FROM (VALUES
+    ('ฟาร์มเพื่อพ่อ (ตัวอย่าง)', 'ชลบุรี'),
+    ('ไร่สุขใจ (ตัวอย่าง)', 'นครราชสีมา'),
+    ('ไร่แสงทอง (ตัวอย่าง)', 'กาญจนบุรี'),
+    ('ฟาร์มอ้อยบ้านสวน (ตัวอย่าง)', 'สุพรรณบุรี'),
+    ('ไร่พอเพียง (ตัวอย่าง)', 'ขอนแก่น')
+) AS seed(name, location)
+WHERE NOT EXISTS (SELECT 1 FROM farm existing WHERE existing.name = seed.name);
 
 INSERT INTO admin_profile (full_name, phone, farm_id, status, joined_date, user_id)
 SELECT seed.full_name, seed.phone, farm.id, 'pending', CURRENT_DATE, users.id
@@ -53,8 +56,12 @@ FROM (VALUES
     ('demo_admin05', 'ประเสริฐ พอเพียง', '0800000005', 'ไร่พอเพียง (ตัวอย่าง)')
 ) AS seed(username, full_name, phone, farm_name)
 JOIN users ON users.username = seed.username
-JOIN farm ON farm.name = seed.farm_name
-WHERE NOT EXISTS (SELECT 1 FROM admin_profile existing WHERE existing.user_id = users.id);
+JOIN LATERAL (
+    SELECT id FROM farm WHERE name = seed.farm_name ORDER BY id LIMIT 1
+) farm ON TRUE
+WHERE users.role = 'admin'
+  AND NOT EXISTS (SELECT 1 FROM admin_profile existing WHERE existing.user_id = users.id)
+ON CONFLICT (user_id) DO NOTHING;
 
 INSERT INTO worker (full_name, nickname, phone, status, farm_id, joined_date, user_id)
 SELECT seed.full_name, seed.nickname, seed.phone, 'pending', farm.id, CURRENT_DATE, users.id
@@ -81,8 +88,12 @@ FROM (VALUES
     ('demo_worker20', 'นภา ตั้งใจ', 'ภา', '0800000120', 'ไร่พอเพียง (ตัวอย่าง)')
 ) AS seed(username, full_name, nickname, phone, farm_name)
 JOIN users ON users.username = seed.username
-JOIN farm ON farm.name = seed.farm_name
-WHERE NOT EXISTS (SELECT 1 FROM worker existing WHERE existing.user_id = users.id);
+JOIN LATERAL (
+    SELECT id FROM farm WHERE name = seed.farm_name ORDER BY id LIMIT 1
+) farm ON TRUE
+WHERE users.role = 'worker'
+  AND NOT EXISTS (SELECT 1 FROM worker existing WHERE existing.user_id = users.id)
+ON CONFLICT (user_id) DO NOTHING;
 
 --rollback DELETE FROM work_logs WHERE worker_id IN (SELECT id FROM worker WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'demo_worker%'));
 --rollback DELETE FROM worker WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'demo_worker%');

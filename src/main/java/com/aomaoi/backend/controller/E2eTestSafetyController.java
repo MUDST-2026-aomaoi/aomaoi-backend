@@ -15,17 +15,25 @@ import java.util.Map;
 public class E2eTestSafetyController {
 
     private final String datasourceUrl;
+    private final boolean allowDockerTestDatabase;
 
-    public E2eTestSafetyController(@Value("${spring.datasource.url:}") String datasourceUrl) {
+    public E2eTestSafetyController(
+            @Value("${spring.datasource.url:}") String datasourceUrl,
+            @Value("${app.e2e.docker.database:false}") boolean allowDockerTestDatabase) {
         this.datasourceUrl = datasourceUrl;
+        this.allowDockerTestDatabase = allowDockerTestDatabase;
     }
 
     @GetMapping("/e2e-readiness")
     public ResponseEntity<Map<String, Boolean>> getE2eReadiness() {
-        return ResponseEntity.ok(Map.of("safeForE2e", isDisposableLocalDatabase(datasourceUrl)));
+        return ResponseEntity.ok(Map.of("safeForE2e", isDisposableLocalDatabase(datasourceUrl, allowDockerTestDatabase)));
     }
 
     static boolean isDisposableLocalDatabase(String jdbcUrl) {
+        return isDisposableLocalDatabase(jdbcUrl, false);
+    }
+
+    static boolean isDisposableLocalDatabase(String jdbcUrl, boolean allowDockerTestDatabase) {
         if (jdbcUrl == null || !jdbcUrl.startsWith("jdbc:postgresql://")) {
             return false;
         }
@@ -40,7 +48,8 @@ public class E2eTestSafetyController {
             boolean localHost = "localhost".equalsIgnoreCase(host)
                     || "127.0.0.1".equals(host)
                     || "::1".equals(host);
-            return localHost && "aomaoi_test".equalsIgnoreCase(database);
+            boolean composeTestHost = allowDockerTestDatabase && "postgres".equalsIgnoreCase(host);
+            return (localHost || composeTestHost) && "aomaoi_test".equalsIgnoreCase(database);
         } catch (IllegalArgumentException exception) {
             return false;
         }

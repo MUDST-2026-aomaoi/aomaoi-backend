@@ -47,7 +47,7 @@ services:
       SPRING_LIQUIBASE_ENABLED: "true"
       SPRING_LIQUIBASE_CONTEXTS: demo
       APP_MIGRATION_JOB: "true"
-      APP_SEED_ENABLED: "true"
+      APP_SEED_ENABLED: "false"
     depends_on:
       postgres:
         condition: service_healthy

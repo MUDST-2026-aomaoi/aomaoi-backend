@@ -99,6 +99,19 @@ class PostgreSqlMigrationIntegrationTest {
     }
 
     @Test
+    void demoContextReusesExistingFarmRowsOnANonBlankDatabase() throws Exception {
+        liquibase().update(new Contexts(), new LabelExpression());
+        execute("INSERT INTO farm(name, location) VALUES ('ฟาร์มเพื่อพ่อ (ตัวอย่าง)', 'ชลบุรี')");
+
+        liquibase().update(new Contexts("demo"), new LabelExpression());
+
+        assertEquals("5", scalar("SELECT count(*) FROM farm"));
+        assertEquals("1", scalar("SELECT count(*) FROM farm WHERE name = 'ฟาร์มเพื่อพ่อ (ตัวอย่าง)'"));
+        assertEquals("5", scalar("SELECT count(*) FROM admin_profile"));
+        assertEquals("20", scalar("SELECT count(*) FROM worker"));
+    }
+
+    @Test
     void liquibaseRollbackRemovesSchemaAndAllowsRecreation() throws Exception {
         Liquibase liquibase = liquibase();
         liquibase.update(new Contexts(), new LabelExpression());

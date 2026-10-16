@@ -9,8 +9,48 @@ services:
     env_file:
       - .env
     environment:
-      SPRING_LIQUIBASE_ENABLED: "true"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-aomaoi_db}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-aomaoi_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-aomaoi_password}
+      SPRING_LIQUIBASE_ENABLED: "false"
+      APP_SEED_ENABLED: "false"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "${DB_PORT:-5434}:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-aomaoi_db}
+      POSTGRES_USER: ${DB_USER:-aomaoi_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-aomaoi_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    env_file:
+      - .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-aomaoi_db}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-aomaoi_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-aomaoi_password}
+      SPRING_LIQUIBASE_ENABLED: "true"
+      APP_MIGRATION_JOB: "true"
+      APP_SEED_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   frontend:
     build:
@@ -23,3 +63,7 @@ services:
     depends_on:
       - app
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+    name: aomaoi_postgres_data

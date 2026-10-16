@@ -16,6 +16,6 @@ class E2eTestSafetyControllerTest {
         assertFalse(E2eTestSafetyController.isDisposableLocalDatabase(
                 "jdbc:postgresql://localhost:5432/postgres"));
         assertFalse(E2eTestSafetyController.isDisposableLocalDatabase(
-                "jdbc:postgresql://aws-0-ap-south-1.pooler.supabase.com:5432/postgres"));
+                "jdbc:postgresql://db.example.com:5432/postgres"));
     }
 }

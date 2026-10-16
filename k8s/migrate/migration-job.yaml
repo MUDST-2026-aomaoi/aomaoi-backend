@@ -33,11 +33,6 @@ spec:
               value: "true"
             - name: APP_MIGRATION_JOB
               value: "true"
-            - name: SPRING_DATASOURCE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: aomaoi-supabase-db
-                  key: jdbc-url
             - name: BOOTSTRAP_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -46,12 +41,12 @@ spec:
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: aomaoi-supabase-db
+                  name: aomaoi-postgres-db
                   key: database-user
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: aomaoi-supabase-db
+                  name: aomaoi-postgres-db
                   key: database-password
             - name: JWT_SECRET
               valueFrom:

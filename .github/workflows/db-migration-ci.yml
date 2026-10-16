@@ -6,12 +6,18 @@ on:
     paths:
       - 'src/main/resources/db/changelog/**'
       - 'src/test/java/com/aomaoi/backend/migration/**'
+      - 'src/main/java/com/aomaoi/backend/entity/**'
+      - 'src/main/resources/application.properties'
+      - 'pom.xml'
       - '.github/workflows/db-migration-ci.yml'
   pull_request:
     branches: [ "main", "dev" ]
     paths:
       - 'src/main/resources/db/changelog/**'
       - 'src/test/java/com/aomaoi/backend/migration/**'
+      - 'src/main/java/com/aomaoi/backend/entity/**'
+      - 'src/main/resources/application.properties'
+      - 'pom.xml'
       - '.github/workflows/db-migration-ci.yml'
 
 jobs:
@@ -45,14 +51,14 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Test farm ID migration using the Spring Liquibase changelog
+      - name: Test PostgreSQL schema, rollback, and Hibernate validation
         env:
           AOMAOI_MIGRATION_TEST_URL: jdbc:postgresql://localhost:5432/aomaoi_db
           AOMAOI_MIGRATION_TEST_USER: aomaoi_user
           AOMAOI_MIGRATION_TEST_PASSWORD: aomaoi_password
         run: |
           chmod +x mvnw
-          ./mvnw -Dtest=FarmIdMigrationIntegrationTest test
+          ./mvnw -Dtest=PostgreSqlMigrationIntegrationTest test
 
       - name: Report Success
         run: echo "Spring Liquibase changelog migration tests passed."

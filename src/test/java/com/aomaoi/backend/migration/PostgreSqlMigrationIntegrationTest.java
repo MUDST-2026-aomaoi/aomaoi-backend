@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Each test owns an isolated schema in an explicitly configured PostgreSQL test database. */
 @EnabledIfEnvironmentVariable(named = "AOMAOI_MIGRATION_TEST_URL", matches = ".+")
 class PostgreSqlMigrationIntegrationTest {
+    private static final Contexts SCHEMA_ONLY = new Contexts("production");
     private Connection connection;
     private String schema;
 
@@ -54,9 +55,9 @@ class PostgreSqlMigrationIntegrationTest {
     void createsCompleteSchemaAndSecondUpdatePreservesData() throws Exception {
         Liquibase liquibase = liquibase();
         liquibase.validate();
-        liquibase.update(new Contexts(), new LabelExpression());
+        liquibase.update(SCHEMA_ONLY, new LabelExpression());
         insertRecords();
-        liquibase.update(new Contexts(), new LabelExpression());
+        liquibase.update(SCHEMA_ONLY, new LabelExpression());
 
         assertEquals("6", scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = '"
                 + schema + "' AND table_name IN ('users', 'farm', 'worker', 'admin_profile', 'work_logs', 'audit_logs')"));
@@ -70,7 +71,7 @@ class PostgreSqlMigrationIntegrationTest {
 
     @Test
     void enforcesRelationshipsUniquenessAndRequiredDates() throws Exception {
-        liquibase().update(new Contexts(), new LabelExpression());
+        liquibase().update(SCHEMA_ONLY, new LabelExpression());
         insertRecords();
 
         assertThrows(SQLException.class, () -> execute("INSERT INTO users(username, password, role)"
@@ -102,7 +103,7 @@ class PostgreSqlMigrationIntegrationTest {
 
     @Test
     void demoContextReusesExistingFarmRowsOnANonBlankDatabase() throws Exception {
-        liquibase().update(new Contexts(), new LabelExpression());
+        liquibase().update(SCHEMA_ONLY, new LabelExpression());
         execute("INSERT INTO farm(name, location) VALUES ('ฟาร์มเพื่อพ่อ (ตัวอย่าง)', 'ชลบุรี')");
 
         liquibase().update(new Contexts("demo"), new LabelExpression());
@@ -116,14 +117,14 @@ class PostgreSqlMigrationIntegrationTest {
     @Test
     void liquibaseRollbackRemovesSchemaAndAllowsRecreation() throws Exception {
         Liquibase liquibase = liquibase();
-        liquibase.update(new Contexts(), new LabelExpression());
+        liquibase.update(SCHEMA_ONLY, new LabelExpression());
         insertRecords();
-        liquibase.rollback(1, new Contexts(), new LabelExpression());
+        liquibase.rollback(1, SCHEMA_ONLY, new LabelExpression());
 
         assertEquals("0", scalar("SELECT count(*) FROM databasechangelog"));
         assertEquals("0", scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = '"
                 + schema + "' AND table_name IN ('users', 'farm', 'worker', 'admin_profile', 'work_logs', 'audit_logs')"));
-        liquibase.update(new Contexts(), new LabelExpression());
+        liquibase.update(SCHEMA_ONLY, new LabelExpression());
         insertRecords();
         assertEquals("1", scalar("SELECT count(*) FROM work_logs"));
     }
@@ -140,6 +141,7 @@ class PostgreSqlMigrationIntegrationTest {
                 "--spring.jpa.properties.hibernate.default_schema=" + schema,
                 "--spring.jpa.hibernate.ddl-auto=validate",
                 "--spring.liquibase.enabled=true",
+                "--spring.liquibase.contexts=production",
                 "--app.seed.enabled=true",
                 "--app.seed.demo-data=true",
                 "--app.bootstrap-admin-password=integration-test-password",

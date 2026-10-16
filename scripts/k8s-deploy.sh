@@ -37,6 +37,11 @@ fi
 if ! [[ "$INGRESS_CLASS" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]; then
   echo "Invalid INGRESS_CLASS '$INGRESS_CLASS'" >&2; exit 1
 fi
+if [[ "$DEMO_DATA" != true && "$DEMO_DATA" != false ]]; then
+  echo "Invalid DEMO_DATA '$DEMO_DATA' (expected true or false)" >&2; exit 1
+fi
+LIQUIBASE_CONTEXTS=production
+if [ "$DEMO_DATA" = true ]; then LIQUIBASE_CONTEXTS=demo; fi
 
 # Render a kustomization and apply the per-deployment settings.
 render() {
@@ -44,6 +49,7 @@ render() {
     | sed -e "s#$DEFAULT_IMAGE#$BACKEND_IMAGE#g" \
           -e "s#aomaoi-app#$NAMESPACE#g" \
           -e "s#ingressClassName: nginx#ingressClassName: $INGRESS_CLASS#" \
+          -e "s#SPRING_LIQUIBASE_CONTEXTS: .*#SPRING_LIQUIBASE_CONTEXTS: '$LIQUIBASE_CONTEXTS'#" \
           -e "s#APP_SEED_DEMO_DATA: \"false\"#APP_SEED_DEMO_DATA: \"$DEMO_DATA\"#"
 }
 

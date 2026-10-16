@@ -10,6 +10,7 @@ data:
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/aomaoi_db
   # Schema migration and seeding run once in the migration Job, never in API Pods.
   SPRING_LIQUIBASE_ENABLED: "false"
+  SPRING_LIQUIBASE_CONTEXTS: "production"
   APP_SEED_ENABLED: "false"
   # false = migration Job creates only `superadmin`; true = development/test demo accounts.
   APP_SEED_DEMO_DATA: "false"

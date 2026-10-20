@@ -32,7 +32,19 @@ build/
 ### VS Code ###
 .vscode/
 .env
+.env.*
+!.env.example
 k8s/secret.local.*
 k8s/registry.local.*
 .runtime/
 *.kubeconfig
+
+### Local runtime artifacts ###
+*.log
+*.pid
+*.hprof
+hs_err_pid*
+
+### Operating system files ###
+.DS_Store
+Thumbs.db

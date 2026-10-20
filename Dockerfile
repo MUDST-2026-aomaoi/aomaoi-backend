@@ -15,8 +15,8 @@ RUN ./mvnw package -DskipTests -B
 # Stage 2: Run with lightweight JRE
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN groupadd --system app && useradd --system --gid app app
-COPY --from=package --chown=app:app /app/target/*.jar app.jar
-USER app
+RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid 10001 --no-create-home app
+COPY --from=package --chown=10001:10001 /app/target/*.jar app.jar
+USER 10001:10001
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

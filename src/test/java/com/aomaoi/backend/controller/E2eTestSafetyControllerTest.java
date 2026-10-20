@@ -1,25 +1,18 @@
 package com.aomaoi.backend.controller;
 
+import com.aomaoi.backend.service.E2eRunService;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class E2eTestSafetyControllerTest {
-
     @Test
-    void permitsOnlyTheLocalDisposableE2eDatabase() {
-        assertTrue(E2eTestSafetyController.isDisposableLocalDatabase(
-                "jdbc:postgresql://localhost:5432/aomaoi_test"));
-        assertTrue(E2eTestSafetyController.isDisposableLocalDatabase(
-                "jdbc:postgresql://127.0.0.1:5432/aomaoi_test?sslmode=require"));
-        assertTrue(E2eTestSafetyController.isDisposableLocalDatabase(
-                "jdbc:postgresql://postgres:5432/aomaoi_test", true));
-        assertFalse(E2eTestSafetyController.isDisposableLocalDatabase(
-                "jdbc:postgresql://postgres:5432/aomaoi_test"));
-        assertFalse(E2eTestSafetyController.isDisposableLocalDatabase(
-                "jdbc:postgresql://localhost:5432/postgres"));
-        assertFalse(E2eTestSafetyController.isDisposableLocalDatabase(
-                "jdbc:postgresql://db.example.com:5432/postgres"));
+    void readinessUsesExplicitSupportConfiguration() {
+        var service = mock(E2eRunService.class);
+        var controller = new E2eTestSafetyController(service);
+        assertEquals(false, controller.readiness().get("safeForE2e"));
+        when(service.enabled()).thenReturn(true);
+        assertEquals(true, controller.readiness().get("safeForE2e"));
+        assertEquals("shared-tracked", controller.readiness().get("mode"));
     }
 }

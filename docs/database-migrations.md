@@ -14,19 +14,18 @@ Hibernate uses `ddl-auto=validate` to check mappings after Liquibase runs.
 
 ```bash
 cp .env.example .env
-# Set DB_PASSWORD, JWT_SECRET, and BOOTSTRAP_ADMIN_PASSWORD in .env.
+# Replace DB_PASSWORD and JWT_SECRET in .env. The JWT secret needs at least 32 bytes.
+# Compose's demo accounts come from the Liquibase demo context; changing
+# BOOTSTRAP_ADMIN_PASSWORD does not change their passwords.
 docker compose up --build -d
 docker compose logs migrate
 ```
 
 PostgreSQL is exposed at `localhost:5434` by default. The API is at
 `http://localhost:8081`. The `migrate` service waits for PostgreSQL to become
-healthy, runs the changelog, bootstraps the initial superadmin, and exits. The API
+healthy, runs the changelog with the demo seed, and exits. The API
 waits for that service to succeed, then starts with schema validation enabled.
-The frontend is at `http://localhost:3000`. This command also starts an isolated
-E2E database (`aomaoi_test`), backend (`http://localhost:8082`), and frontend
-(`http://localhost:3001`) when the sibling frontend repository is available.
-Run Cypress from the frontend repository against port 3001.
+The frontend is at `http://localhost:3000`. Cypress uses the same application stack with tracked test runs and automatic cleanup; see [shared E2E](shared-e2e.md).
 
 Data lives in the named volume `aomaoi_postgres_data` across container restarts.
 Use `docker compose down` to stop the stack without deleting that volume;

@@ -28,7 +28,10 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+            com.aomaoi.backend.service.E2eRunService runs,
+            org.springframework.transaction.PlatformTransactionManager manager,
+            org.springframework.jdbc.core.JdbcTemplate jdbc) throws Exception {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
@@ -36,6 +39,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/error").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/test-support/e2e-readiness").permitAll()
+                .requestMatchers("/api/test-support/runs", "/api/test-support/runs/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // SuperAdmin only: audit trail, and creating/editing/deleting farms & admins
@@ -59,7 +63,8 @@ public class SecurityConfig {
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
                 })
             )
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(new E2eRequestFilter(runs, manager, jdbc), JwtAuthenticationFilter.class);
 
         return http.build();
     }

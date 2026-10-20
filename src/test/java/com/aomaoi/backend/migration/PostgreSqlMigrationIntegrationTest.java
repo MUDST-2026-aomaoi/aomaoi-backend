@@ -61,7 +61,7 @@ class PostgreSqlMigrationIntegrationTest {
 
         assertEquals("6", scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = '"
                 + schema + "' AND table_name IN ('users', 'farm', 'worker', 'admin_profile', 'work_logs', 'audit_logs')"));
-        assertEquals("1", scalar("SELECT count(*) FROM databasechangelog"));
+        assertEquals("2", scalar("SELECT count(*) FROM databasechangelog"));
         assertEquals("10.50", scalar("SELECT total FROM work_logs"));
         assertEquals("bigint", scalar("SELECT data_type FROM information_schema.columns WHERE table_schema = '"
                 + schema + "' AND table_name = 'worker' AND column_name = 'farm_id'"));
@@ -119,7 +119,7 @@ class PostgreSqlMigrationIntegrationTest {
         Liquibase liquibase = liquibase();
         liquibase.update(SCHEMA_ONLY, new LabelExpression());
         insertRecords();
-        liquibase.rollback(1, SCHEMA_ONLY, new LabelExpression());
+        liquibase.rollback(2, SCHEMA_ONLY, new LabelExpression());
 
         assertEquals("0", scalar("SELECT count(*) FROM databasechangelog"));
         assertEquals("0", scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = '"
@@ -146,12 +146,84 @@ class PostgreSqlMigrationIntegrationTest {
                 "--app.seed.demo-data=true",
                 "--app.bootstrap-admin-password=integration-test-password",
                 "--app.migration-job=false",
+                "--app.e2e.support-key=integration-test-support-key-at-least-32-characters",
                 "--spring.jpa.show-sql=false",
                 "--logging.level.org.springframework.security=INFO")) {
             assertTrue(context.isActive());
             assertEquals("4", scalar("SELECT count(*) FROM users"));
             assertEquals("4", scalar("SELECT count(*) FROM work_logs"));
+            verifySharedE2e(context);
         }
+    }
+
+    private void verifySharedE2e(org.springframework.context.ConfigurableApplicationContext context) throws Exception {
+        var runs = context.getBean(com.aomaoi.backend.service.E2eRunService.class);
+        String key = "integration-test-support-key-at-least-32-characters";
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> runs.create("wrong"));
+        var run = runs.create(key);
+        var other = runs.create(key);
+        var manager = context.getBean(org.springframework.transaction.PlatformTransactionManager.class);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(manager);
+        var jdbc = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        long realFarmId = jdbc.queryForObject("SELECT min(id) FROM farm WHERE e2e_run_id IS NULL", Long.class);
+        int port = ((org.springframework.boot.web.server.context.WebServerApplicationContext) context)
+                .getWebServer().getPort();
+        String base = "http://localhost:" + port + "/api";
+        var client = java.net.http.HttpClient.newHttpClient();
+        var mapper = new tools.jackson.databind.json.JsonMapper();
+        var login = client.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/auth/login"))
+                .header("Content-Type", "application/json")
+                .header("X-E2E-Run", run.get("id")).header("X-E2E-Token", run.get("token"))
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
+                        "{\"username\":\"" + run.get("username") + "\",\"password\":\"" + run.get("password") + "\"}"))
+                .build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, login.statusCode(), login.body());
+        String jwt = mapper.readTree(login.body()).get("token").asText();
+        var create = client.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/farms"))
+                .header("Content-Type", "application/json").header("Authorization", "Bearer " + jwt)
+                .header("X-E2E-Run", run.get("id")).header("X-E2E-Token", run.get("token"))
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("{\"name\":\"E2E farm\",\"location\":\"test\"}"))
+                .build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, create.statusCode(), create.body());
+        long farmId = mapper.readTree(create.body()).get("id").asLong();
+        assertEquals(run.get("id"), jdbc.queryForObject("SELECT e2e_run_id FROM farm WHERE id=?", String.class, farmId));
+        var blocked = client.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/farms/" + realFarmId))
+                .header("Authorization", "Bearer " + jwt)
+                .header("X-E2E-Run", run.get("id")).header("X-E2E-Token", run.get("token"))
+                .DELETE().build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertTrue(blocked.statusCode() >= 400, blocked.body());
+        var unguarded = client.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/farms"))
+                .header("Authorization", "Bearer " + jwt).GET().build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(403, unguarded.statusCode());
+        assertThrows(RuntimeException.class, () -> tx.executeWithoutResult(status -> {
+            runs.enter(run.get("id"), run.get("token"));
+            jdbc.update("INSERT INTO worker(farm_id) VALUES (?)", realFarmId);
+        }));
+        assertThrows(RuntimeException.class, () -> tx.executeWithoutResult(status -> {
+            runs.enter(other.get("id"), other.get("token"));
+            jdbc.update("DELETE FROM farm WHERE id=?", farmId);
+        }));
+        tx.executeWithoutResult(status -> {
+            runs.enter(run.get("id"), run.get("token"));
+            jdbc.update("UPDATE farm SET name='renamed without e2e prefix' WHERE id=?", farmId);
+            jdbc.update("INSERT INTO users(username,password,role) VALUES ('e2e_fixture_worker','hash','worker')");
+            long userId = jdbc.queryForObject("SELECT id FROM users WHERE username='e2e_fixture_worker'", Long.class);
+            jdbc.update("INSERT INTO worker(user_id,farm_id) VALUES (?,?)", userId, farmId);
+            long workerId = jdbc.queryForObject("SELECT id FROM worker WHERE user_id=?", Long.class, userId);
+            jdbc.update("INSERT INTO work_logs(worker_id,type,work_date,start_date,end_date,total) "
+                    + "VALUES (?,'cutting',CURRENT_DATE,CURRENT_DATE,CURRENT_DATE,100)", workerId);
+            jdbc.update("INSERT INTO audit_logs(action,performed_by,target_user,timestamp) "
+                    + "VALUES ('TEST',?,'fixture',now())", run.get("username"));
+        });
+        assertEquals(0, runs.cleanup(run.get("id"), key).get("remaining"));
+        assertEquals(0, runs.cleanup(run.get("id"), key).get("remaining")); // retry is harmless
+        assertEquals("4", scalar("SELECT count(*) FROM work_logs")); // original rows untouched
+        assertEquals(1L, jdbc.queryForObject("SELECT count(*) FROM e2e_runs WHERE id=?", Long.class, other.get("id")));
+        jdbc.update("UPDATE e2e_runs SET expires_at=now()-interval '1 minute' WHERE id=?", other.get("id"));
+        runs.cleanupExpired();
+        assertEquals(0L, jdbc.queryForObject("SELECT count(*) FROM e2e_runs", Long.class));
+        assertEquals("4", scalar("SELECT count(*) FROM users"));
     }
 
     private Liquibase liquibase() throws Exception {

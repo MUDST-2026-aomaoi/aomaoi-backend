@@ -1,57 +1,36 @@
 package com.aomaoi.backend.controller;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-import java.net.URI;
+import com.aomaoi.backend.service.E2eRunService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
-/** Reports whether this backend is connected to the local disposable E2E database. */
 @RestController
 @RequestMapping("/api/test-support")
+@RequiredArgsConstructor
 public class E2eTestSafetyController {
-
-    private final String datasourceUrl;
-    private final boolean allowDockerTestDatabase;
-
-    public E2eTestSafetyController(
-            @Value("${spring.datasource.url:}") String datasourceUrl,
-            @Value("${app.e2e.docker.database:false}") boolean allowDockerTestDatabase) {
-        this.datasourceUrl = datasourceUrl;
-        this.allowDockerTestDatabase = allowDockerTestDatabase;
-    }
+    private final E2eRunService runs;
 
     @GetMapping("/e2e-readiness")
-    public ResponseEntity<Map<String, Boolean>> getE2eReadiness() {
-        return ResponseEntity.ok(Map.of("safeForE2e", isDisposableLocalDatabase(datasourceUrl, allowDockerTestDatabase)));
+    public Map<String, Object> readiness() {
+        return Map.of("safeForE2e", runs.enabled(), "mode", "shared-tracked");
     }
 
-    static boolean isDisposableLocalDatabase(String jdbcUrl) {
-        return isDisposableLocalDatabase(jdbcUrl, false);
+    @PostMapping("/runs")
+    public Map<String, String> create(@RequestHeader("X-E2E-Support-Key") String key) {
+        return runs.create(key);
     }
 
-    static boolean isDisposableLocalDatabase(String jdbcUrl, boolean allowDockerTestDatabase) {
-        if (jdbcUrl == null || !jdbcUrl.startsWith("jdbc:postgresql://")) {
-            return false;
-        }
+    @PostMapping("/runs/{id}/heartbeat")
+    public Map<String, Boolean> heartbeat(@PathVariable String id,
+                                        @RequestHeader("X-E2E-Token") String token) {
+        runs.heartbeat(id, token);
+        return Map.of("alive", true);
+    }
 
-        try {
-            URI uri = URI.create(jdbcUrl.substring("jdbc:".length()));
-            String host = uri.getHost();
-            if (host != null) {
-                host = host.replace("[", "").replace("]", "");
-            }
-            String database = uri.getPath() == null ? "" : uri.getPath().replaceFirst("^/", "");
-            boolean localHost = "localhost".equalsIgnoreCase(host)
-                    || "127.0.0.1".equals(host)
-                    || "::1".equals(host);
-            boolean composeTestHost = allowDockerTestDatabase && "postgres".equalsIgnoreCase(host);
-            return (localHost || composeTestHost) && "aomaoi_test".equalsIgnoreCase(database);
-        } catch (IllegalArgumentException exception) {
-            return false;
-        }
+    @DeleteMapping("/runs/{id}")
+    public Map<String, Object> cleanup(@PathVariable String id,
+                                      @RequestHeader("X-E2E-Support-Key") String key) {
+        return runs.cleanup(id, key);
     }
 }

@@ -1,6 +1,9 @@
 package com.aomaoi.backend.service;
 
 import com.aomaoi.backend.entity.User;
+import com.aomaoi.backend.entity.AdminProfile;
+import com.aomaoi.backend.repository.AdminProfileRepository;
+import com.aomaoi.backend.repository.WorkerRepository;
 import com.aomaoi.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +24,10 @@ class CustomUserDetailsServiceTest {
 
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private AdminProfileRepository adminProfileRepository;
+    @Mock
+    private WorkerRepository workerRepository;
 
     @InjectMocks
     private CustomUserDetailsService customUserDetailsService;
@@ -40,14 +47,28 @@ class CustomUserDetailsServiceTest {
     @Test
     void loadUserByUsername_Success() {
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+        AdminProfile profile = new AdminProfile();
+        profile.setStatus("active");
+        when(adminProfileRepository.findByUserUsername("testuser")).thenReturn(Optional.of(profile));
 
         UserDetails userDetails = customUserDetailsService.loadUserByUsername("testuser");
 
         assertNotNull(userDetails);
         assertEquals("testuser", userDetails.getUsername());
         assertEquals("encoded_password", userDetails.getPassword());
+        assertTrue(userDetails.isEnabled());
         assertTrue(userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")));
+    }
+
+    @Test
+    void loadUserByUsername_InactiveAdmin_IsDisabled() {
+        AdminProfile profile = new AdminProfile();
+        profile.setStatus("inactive");
+        when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+        when(adminProfileRepository.findByUserUsername("testuser")).thenReturn(Optional.of(profile));
+
+        assertFalse(customUserDetailsService.loadUserByUsername("testuser").isEnabled());
     }
 
     @Test

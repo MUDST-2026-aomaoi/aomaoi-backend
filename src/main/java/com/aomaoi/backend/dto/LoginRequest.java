@@ -1,10 +1,11 @@
 package com.aomaoi.backend.dto;
 
 import lombok.Data;
+import jakarta.validation.constraints.NotBlank;
 
 @Data
 public class LoginRequest {
-    private String username;
-    private String password;
+    @NotBlank private String username;
+    @NotBlank private String password;
 }
 

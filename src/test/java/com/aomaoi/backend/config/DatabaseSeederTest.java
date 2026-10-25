@@ -54,8 +54,8 @@ class DatabaseSeederTest {
 
     @BeforeEach
     void setUp() {
-        when(passwordEncoder.encode("1234")).thenReturn("encoded1234");
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(passwordEncoder.encode("1234")).thenReturn("encoded1234");
+        lenient().when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -139,12 +139,10 @@ class DatabaseSeederTest {
 
         databaseSeeder.run();
 
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository, times(4)).save(userCaptor.capture());
-        for (int i = 0; i < users.size(); i++) {
-            assertSame(users.get(i), userCaptor.getAllValues().get(i));
-            assertEquals("encoded1234", users.get(i).getPassword());
-            assertFalse(users.get(i).getIsFirstLogin());
+        verify(userRepository, never()).save(any());
+        for (User existing : users) {
+            assertEquals("previous-password", existing.getPassword());
+            assertTrue(existing.getIsFirstLogin());
         }
         verify(farmRepository, never()).save(any());
         verify(adminProfileRepository, never()).save(any());

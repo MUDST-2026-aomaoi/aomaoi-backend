@@ -3,6 +3,9 @@ package com.aomaoi.backend.service;
 import com.aomaoi.backend.dto.FarmRequestDTO;
 import com.aomaoi.backend.entity.Farm;
 import com.aomaoi.backend.repository.FarmRepository;
+import com.aomaoi.backend.repository.WorkerRepository;
+import com.aomaoi.backend.repository.AdminProfileRepository;
+import com.aomaoi.backend.repository.WorkLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,6 +26,15 @@ class FarmServiceTest {
 
     @Mock
     private FarmRepository farmRepository;
+
+    @Mock
+    private WorkerRepository workerRepository;
+
+    @Mock
+    private AdminProfileRepository adminProfileRepository;
+
+    @Mock
+    private WorkLogRepository workLogRepository;
 
     @InjectMocks
     private FarmService farmService;
@@ -56,6 +69,23 @@ class FarmServiceTest {
 
         assertNotNull(result);
         assertEquals("Green Farm", result.getName());
+    }
+
+    @Test
+    void getFarmById_DerivesCurrentMetrics() {
+        when(farmRepository.findById(1L)).thenReturn(Optional.of(farm));
+        when(workerRepository.countByFarmIdAndStatusNot(1L, "inactive")).thenReturn(4L);
+        when(adminProfileRepository.countByFarmIdAndStatusNot(1L, "inactive")).thenReturn(1L);
+        when(workLogRepository.sumTotalByFarmId(1L)).thenReturn(new BigDecimal("1250.00"));
+        when(workLogRepository.sumTotalByFarmIdAndWorkDateBetween(eq(1L), any(), any()))
+                .thenReturn(new BigDecimal("300.00"));
+
+        Farm result = farmService.getFarmById(1L);
+
+        assertEquals(4, result.getWorkerCount());
+        assertEquals(1, result.getAdminCount());
+        assertEquals(1250.0, result.getTotalWages());
+        assertEquals(300.0, result.getMonthlyWages());
     }
 
     @Test

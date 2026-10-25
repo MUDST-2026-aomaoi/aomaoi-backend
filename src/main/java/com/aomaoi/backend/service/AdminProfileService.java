@@ -27,16 +27,20 @@ public class AdminProfileService {
     }
 
     public AdminProfile getAdminById(Long id) {
-        return adminRepository.findById(id).orElseThrow(() -> new RuntimeException("Admin not found"));
+        return adminRepository.findById(id).orElseThrow(() -> new java.util.NoSuchElementException("Admin not found"));
     }
 
     @Transactional
     public AdminProfile addAdmin(AdminRequestDTO dto) {
+        if (dto == null || dto.getUsername() == null || dto.getUsername().isBlank()
+                || dto.getFullName() == null || dto.getFullName().isBlank()
+                || dto.getTempPassword() == null || dto.getTempPassword().length() < 6)
+            throw new IllegalArgumentException("Username, full name and a 6-character password are required");
         if (userRepository.existsByUsername(dto.getUsername())) {
-            throw new RuntimeException("Username already exists");
+            throw new IllegalArgumentException("Username already exists");
         }
 
-        com.aomaoi.backend.entity.Farm farm = requireFarm(dto.getFarmId());
+        requireFarm(dto.getFarmId());
 
         User user = new User();
         user.setUsername(dto.getUsername());
@@ -52,9 +56,6 @@ public class AdminProfileService {
         admin.setAvatar(dto.getAvatar());
         admin.setStatus("pending");
         admin.setUser(user);
-
-        farm.setAdminCount(farm.getAdminCount() + 1);
-        farmRepository.save(farm);
 
         AdminProfile savedAdmin = adminRepository.save(admin);
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
@@ -76,7 +77,7 @@ public class AdminProfileService {
 
         if (dto.getUsername() != null && !dto.getUsername().equals(admin.getUser().getUsername())) {
             if (userRepository.existsByUsername(dto.getUsername())) {
-                throw new RuntimeException("Username already exists");
+                throw new IllegalArgumentException("Username already exists");
             }
             admin.getUser().setUsername(dto.getUsername());
             userRepository.save(admin.getUser());
@@ -105,6 +106,6 @@ public class AdminProfileService {
             throw new IllegalArgumentException("A positive farmId is required");
         }
         return farmRepository.findById(farmId)
-                .orElseThrow(() -> new IllegalArgumentException("Farm not found"));
+                .orElseThrow(() -> new java.util.NoSuchElementException("Farm not found"));
     }
 }

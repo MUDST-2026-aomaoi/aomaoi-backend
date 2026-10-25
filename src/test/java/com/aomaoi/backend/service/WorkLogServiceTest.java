@@ -2,11 +2,9 @@ package com.aomaoi.backend.service;
 
 import com.aomaoi.backend.dto.WorkLogRequestDTO;
 import com.aomaoi.backend.entity.AdminProfile;
-import com.aomaoi.backend.entity.Farm;
 import com.aomaoi.backend.entity.WorkLog;
 import com.aomaoi.backend.entity.Worker;
 import com.aomaoi.backend.repository.AdminProfileRepository;
-import com.aomaoi.backend.repository.FarmRepository;
 import com.aomaoi.backend.repository.WorkLogRepository;
 import com.aomaoi.backend.repository.WorkerRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -40,9 +38,6 @@ class WorkLogServiceTest {
     private WorkerRepository workerRepository;
 
     @Mock
-    private FarmRepository farmRepository;
-
-    @Mock
     private AdminProfileRepository adminProfileRepository;
 
     @Mock
@@ -60,6 +55,7 @@ class WorkLogServiceTest {
         worker.setId(1L);
         worker.setFullName("Worker One");
         worker.setFarmId(10L);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("superadmin", "pass", List.of(new SimpleGrantedAuthority("ROLE_SUPERADMIN"))));
 
         workLog = new WorkLog();
         workLog.setId(100L);
@@ -105,6 +101,25 @@ class WorkLogServiceTest {
 
         assertEquals(1, result.size());
         verify(workLogRepository, never()).findAllByOrderByWorkDateDescIdDesc();
+    }
+
+    @Test
+    void addLog_AdminCannotWriteAnotherFarm() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        AdminProfile profile = new AdminProfile();
+        profile.setFarmId(99L);
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("spraying");
+        dto.setDate("2026-10-12");
+        dto.setTanks(1);
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
+        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(profile));
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> workLogService.addLog(dto));
+        verify(workLogRepository, never()).save(any());
     }
 
     @Test
@@ -199,7 +214,7 @@ class WorkLogServiceTest {
     }
 
     @Test
-    void addLog_Success_UpdatesFarmWages() {
+    void addLog_Success_CalculatesWage() {
         WorkLogRequestDTO dto = new WorkLogRequestDTO();
         dto.setWorkerId("1");
         dto.setType("cutting");
@@ -207,13 +222,7 @@ class WorkLogServiceTest {
         dto.setRows(10);
         dto.setWaPerRow(5);
 
-        Farm farm = new Farm();
-        farm.setId(10L);
-        farm.setTotalWages(500.0);
-        farm.setMonthlyWages(200.0);
-
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
-        when(farmRepository.findById(10L)).thenReturn(Optional.of(farm));
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
         when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
             WorkLog log = i.getArgument(0);
             log.setId(100L);
@@ -224,9 +233,6 @@ class WorkLogServiceTest {
 
         assertNotNull(result);
         assertEquals("100", result.get("id"));
-        assertEquals(600.0, farm.getTotalWages());
-        assertEquals(300.0, farm.getMonthlyWages());
-        verify(farmRepository).save(farm);
     }
 
     @Test
@@ -269,8 +275,7 @@ class WorkLogServiceTest {
         dto.setEndDate("2026-10-03");
         dto.setDailyRate(BigDecimal.valueOf(300));
 
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
-        when(farmRepository.findById(10L)).thenReturn(Optional.empty());
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
         when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
             WorkLog log = i.getArgument(0);
             log.setId(101L);
@@ -293,7 +298,7 @@ class WorkLogServiceTest {
         dto.setEndDate("2026-10-01");
         dto.setDailyRate(BigDecimal.valueOf(300));
 
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
         assertEquals("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น", ex.getMessage());
@@ -307,8 +312,7 @@ class WorkLogServiceTest {
         dto.setDays(2);
         dto.setDailyRate(BigDecimal.valueOf(250));
 
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
-        when(farmRepository.findById(10L)).thenReturn(Optional.empty());
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
         when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
             WorkLog log = i.getArgument(0);
             log.setId(102L);
@@ -331,7 +335,7 @@ class WorkLogServiceTest {
         dto.setDays(2);
         dto.setDailyRate(BigDecimal.valueOf(250));
 
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
         when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
             WorkLog log = i.getArgument(0);
             log.setId(104L);
@@ -353,7 +357,7 @@ class WorkLogServiceTest {
         dto.setType("watering");
         dto.setDailyRate(BigDecimal.valueOf(300));
 
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
         assertEquals("Date (or startDate and endDate) is required", ex.getMessage());
@@ -367,27 +371,9 @@ class WorkLogServiceTest {
         dto.setDate(LocalDate.now().toString());
         dto.setTanks(1);
 
-        when(workerRepository.findById(99L)).thenReturn(Optional.empty());
+        when(workerRepository.findLockedById(99L)).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
-    }
-
-    @Test
-    void getTotalAllTime() {
-        when(workLogRepository.findAll()).thenReturn(List.of(workLog));
-
-        BigDecimal total = workLogService.getTotalAllTime();
-
-        assertEquals(BigDecimal.valueOf(100.0), total);
-    }
-
-    @Test
-    void getTotalThisMonth() {
-        when(workLogRepository.findByWorkDateBetween(any(), any())).thenReturn(List.of(workLog));
-
-        BigDecimal total = workLogService.getTotalThisMonth();
-
-        assertEquals(BigDecimal.valueOf(100.0), total);
     }
 
     @Test
@@ -399,7 +385,7 @@ class WorkLogServiceTest {
         dto.setRows(5);
         dto.setWaPerRow(10);
 
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
         when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
             WorkLog log = i.getArgument(0);
             log.setId(101L);
@@ -423,7 +409,7 @@ class WorkLogServiceTest {
         dto.setEndDate("2026-10-12");
         dto.setDailyRate(BigDecimal.valueOf(350));
 
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
         when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
             WorkLog log = i.getArgument(0);
             log.setId(102L);
@@ -447,7 +433,7 @@ class WorkLogServiceTest {
         dto.setEndDate("2026-10-10");
         dto.setDailyRate(BigDecimal.valueOf(350));
 
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
 
         assertThrows(RuntimeException.class, () -> workLogService.addLog(dto));
     }
@@ -461,7 +447,7 @@ class WorkLogServiceTest {
         dto.setDays(1);
         dto.setDailyRate(BigDecimal.valueOf(350));
 
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
         when(workLogRepository.countByWorkerIdAndTypeAndWorkDate(1L, "watering", LocalDate.parse("2026-10-12")))
                 .thenReturn(2L);
 
@@ -478,7 +464,7 @@ class WorkLogServiceTest {
         dto.setRows(5);
         dto.setWaPerRow(10);
 
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
         when(workLogRepository.save(any(WorkLog.class))).thenAnswer(i -> {
             WorkLog log = i.getArgument(0);
             log.setId(103L);

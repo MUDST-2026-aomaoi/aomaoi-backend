@@ -9,6 +9,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 
@@ -19,38 +22,39 @@ public class WorkerService {
     private final WorkerRepository workerRepository;
     private final UserRepository userRepository;
     private final com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
-    private final com.aomaoi.backend.repository.FarmRepository farmRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditLogService auditLogService;
 
     public List<Worker> getAllWorkers() {
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.isAuthenticated() && !auth.getName().equals("superadmin") && !auth.getName().equals("anonymousUser")) {
-            String currentUsername = auth.getName();
-            return adminProfileRepository.findByUserUsername(currentUsername)
-                    .map(adminProfile -> adminProfile.getFarmId() == null
-                            ? List.<Worker>of() : workerRepository.findByFarmId(adminProfile.getFarmId()))
-                    .orElseGet(() -> workerRepository.findAll());
-        }
-        return workerRepository.findAll();
-    }
-
-    public List<Worker> getActiveWorkers() {
-        return workerRepository.findByStatus("active");
+        Authentication auth = requireAuthentication();
+        if (hasRole(auth, "SUPERADMIN")) return workerRepository.findAll();
+        if (hasRole(auth, "ADMIN")) return workerRepository.findByFarmId(requireAdminFarm(auth.getName()));
+        if (hasRole(auth, "WORKER")) return workerRepository.findByUserUsername(auth.getName())
+                .map(List::of).orElseGet(List::of);
+        throw new AccessDeniedException("Unknown role");
     }
 
     public Worker getWorkerById(Long id) {
-        return workerRepository.findById(id).orElseThrow(() -> new RuntimeException("Worker not found"));
+        Worker worker = workerRepository.findById(id).orElseThrow(() -> new java.util.NoSuchElementException("Worker not found"));
+        requireWorkerAccess(worker, false);
+        return worker;
     }
 
     @Transactional
     public Worker addWorker(WorkerRequestDTO dto) {
+        Authentication auth = requireAuthentication();
+        if (!hasRole(auth, "ADMIN") && !hasRole(auth, "SUPERADMIN"))
+            throw new AccessDeniedException("Worker management requires admin access");
+        if (dto.getTempPassword() == null || dto.getTempPassword().length() < 6)
+            throw new IllegalArgumentException("Temporary password must be at least 6 characters");
+        if (dto.getFullName() == null || dto.getFullName().isBlank())
+            throw new IllegalArgumentException("Worker full name is required");
         if (dto.getUsername() == null || !dto.getUsername().matches("^[\\w\\p{Punct}]+$")) {
-            throw new RuntimeException("Username cannot contain spaces and must contain only characters, numbers, and special characters.");
+            throw new IllegalArgumentException("Username cannot contain spaces and must contain only characters, numbers, and special characters.");
         }
 
         if (userRepository.existsByUsername(dto.getUsername())) {
-            throw new RuntimeException("Username already exists");
+            throw new IllegalArgumentException("Username already exists");
         }
 
         User user = new User();
@@ -69,21 +73,8 @@ public class WorkerService {
         worker.setUser(user);
 
         // Get currently logged-in user and assign farmId if they are an admin
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        String currentUsername = "system";
-        if (auth != null && auth.isAuthenticated()) {
-            currentUsername = auth.getName();
-            adminProfileRepository.findByUserUsername(currentUsername).ifPresent(adminProfile -> {
-                worker.setFarmId(adminProfile.getFarmId());
-                if (adminProfile.getFarmId() != null) {
-                    com.aomaoi.backend.entity.Farm farm = farmRepository.findById(adminProfile.getFarmId()).orElse(null);
-                    if (farm != null) {
-                        farm.setWorkerCount(farm.getWorkerCount() + 1);
-                        farmRepository.save(farm);
-                    }
-                }
-            });
-        }
+        String currentUsername = auth.getName();
+        if (hasRole(auth, "ADMIN")) worker.setFarmId(requireAdminFarm(currentUsername));
 
         Worker savedWorker = workerRepository.save(worker);
         auditLogService.logAction("CREATE_WORKER", currentUsername, user.getUsername(), "Created new worker account");
@@ -93,6 +84,7 @@ public class WorkerService {
     @Transactional
     public Worker updateWorker(Long id, WorkerRequestDTO dto) {
         Worker worker = getWorkerById(id);
+        requireWorkerAccess(worker, true);
         worker.setFullName(dto.getFullName());
         worker.setNickname(dto.getNickname());
         worker.setPhone(dto.getPhone());
@@ -100,10 +92,10 @@ public class WorkerService {
 
         if (dto.getUsername() != null && !dto.getUsername().equals(worker.getUser().getUsername())) {
             if (!dto.getUsername().matches("^[\\w\\p{Punct}]+$")) {
-                throw new RuntimeException("Username cannot contain spaces and must contain only characters, numbers, and special characters.");
+                throw new IllegalArgumentException("Username cannot contain spaces and must contain only characters, numbers, and special characters.");
             }
             if (userRepository.existsByUsername(dto.getUsername())) {
-                throw new RuntimeException("Username already exists");
+                throw new IllegalArgumentException("Username already exists");
             }
             worker.getUser().setUsername(dto.getUsername());
             userRepository.save(worker.getUser());
@@ -119,6 +111,7 @@ public class WorkerService {
     @Transactional
     public void deleteWorker(Long id) {
         Worker worker = getWorkerById(id);
+        requireWorkerAccess(worker, true);
         worker.setStatus("inactive");
         workerRepository.save(worker);
         
@@ -129,14 +122,10 @@ public class WorkerService {
 
     @Transactional
     public void resetWorkerPassword(Long workerId, String newPassword, String adminUsername) {
+        if (newPassword == null || newPassword.length() < 6)
+            throw new IllegalArgumentException("Password must be at least 6 characters");
         Worker worker = getWorkerById(workerId);
-
-        // If the caller is an admin (not superadmin), they may only reset workers in their own farm.
-        adminProfileRepository.findByUserUsername(adminUsername).ifPresent(adminProfile -> {
-            if (!adminProfile.getFarmId().equals(worker.getFarmId())) {
-                throw new org.springframework.security.access.AccessDeniedException("Cannot reset a worker outside your farm");
-            }
-        });
+        requireWorkerAccess(worker, true);
 
         User user = worker.getUser();
 
@@ -154,5 +143,32 @@ public class WorkerService {
             user.getUsername(), 
             "Reset worker password"
         );
+    }
+
+    private Authentication requireAuthentication() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName()))
+            throw new AccessDeniedException("Authentication required");
+        return auth;
+    }
+
+    private boolean hasRole(Authentication auth, String role) {
+        return auth.getAuthorities().stream().anyMatch(a -> ("ROLE_" + role).equals(a.getAuthority()));
+    }
+
+    private Long requireAdminFarm(String username) {
+        return adminProfileRepository.findByUserUsername(username)
+                .map(profile -> profile.getFarmId())
+                .orElseThrow(() -> new AccessDeniedException("Admin has no farm"));
+    }
+
+    private void requireWorkerAccess(Worker worker, boolean write) {
+        Authentication auth = requireAuthentication();
+        if (hasRole(auth, "SUPERADMIN")) return;
+        if (hasRole(auth, "ADMIN") && worker.getFarmId() != null
+                && worker.getFarmId().equals(requireAdminFarm(auth.getName()))) return;
+        if (!write && hasRole(auth, "WORKER") && worker.getUser() != null
+                && auth.getName().equals(worker.getUser().getUsername())) return;
+        throw new AccessDeniedException("Worker is outside your access scope");
     }
 }

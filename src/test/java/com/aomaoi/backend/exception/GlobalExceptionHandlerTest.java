@@ -17,9 +17,9 @@ class GlobalExceptionHandlerTest {
 
         ResponseEntity<Map<String, String>> response = handler.handleRuntimeException(ex);
 
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals("Error occurred", response.getBody().get("message"));
+        assertEquals("Internal server error", response.getBody().get("message"));
     }
 
     @Test

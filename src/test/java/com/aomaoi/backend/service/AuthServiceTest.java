@@ -248,7 +248,6 @@ class AuthServiceTest {
 
         when(userDetailsService.loadUserByUsername("admin1")).thenReturn(userDetails);
         when(userRepository.findByUsername("admin1")).thenReturn(Optional.of(adminUser));
-        when(jwtUtil.generateToken(any(), eq("admin"))).thenReturn("mock_token");
         when(adminProfileRepository.findByUserUsername("admin1")).thenReturn(Optional.of(profile));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.login(request));
@@ -267,7 +266,6 @@ class AuthServiceTest {
 
         when(userDetailsService.loadUserByUsername("worker1")).thenReturn(userDetails);
         when(userRepository.findByUsername("worker1")).thenReturn(Optional.of(workerUser));
-        when(jwtUtil.generateToken(any(), eq("worker"))).thenReturn("mock_token");
         when(workerRepository.findByUserUsername("worker1")).thenReturn(Optional.of(worker));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.login(request));

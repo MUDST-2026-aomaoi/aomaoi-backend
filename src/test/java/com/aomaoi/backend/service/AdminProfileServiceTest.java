@@ -102,7 +102,6 @@ class AdminProfileServiceTest {
 
         Farm farm = new Farm();
         farm.setId(10L);
-        farm.setAdminCount(1);
 
         when(userRepository.existsByUsername("newadmin")).thenReturn(false);
         when(passwordEncoder.encode("temp123")).thenReturn("encoded_temp");
@@ -115,14 +114,14 @@ class AdminProfileServiceTest {
         assertNotNull(created);
         assertEquals("New Admin", created.getFullName());
         assertEquals("pending", created.getStatus());
-        assertEquals(2, farm.getAdminCount());
-        verify(farmRepository).save(farm);
     }
 
     @Test
     void addAdmin_UsernameExists_ThrowsException() {
         AdminRequestDTO dto = new AdminRequestDTO();
         dto.setUsername("existingadmin");
+        dto.setTempPassword("temp123");
+        dto.setFullName("Existing Admin");
 
         when(userRepository.existsByUsername("existingadmin")).thenReturn(true);
 
@@ -163,10 +162,12 @@ class AdminProfileServiceTest {
     void addAdmin_FarmNotFound_RejectsBeforeSavingUser() {
         AdminRequestDTO dto = new AdminRequestDTO();
         dto.setUsername("admin2");
+        dto.setFullName("Admin Two");
+        dto.setTempPassword("temp123");
         dto.setFarmId(99L);
         when(farmRepository.findById(99L)).thenReturn(Optional.empty());
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        java.util.NoSuchElementException ex = assertThrows(java.util.NoSuchElementException.class,
                 () -> adminProfileService.addAdmin(dto));
 
         assertEquals("Farm not found", ex.getMessage());
@@ -192,7 +193,7 @@ class AdminProfileServiceTest {
         when(adminRepository.findById(1L)).thenReturn(Optional.of(admin));
         when(farmRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class, () -> adminProfileService.updateAdmin(1L, dto));
+        assertThrows(java.util.NoSuchElementException.class, () -> adminProfileService.updateAdmin(1L, dto));
         assertEquals(10L, admin.getFarmId());
         verify(adminRepository, never()).save(any());
     }

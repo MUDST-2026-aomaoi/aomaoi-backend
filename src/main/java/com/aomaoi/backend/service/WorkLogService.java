@@ -6,6 +6,10 @@ import com.aomaoi.backend.entity.Worker;
 import com.aomaoi.backend.repository.WorkLogRepository;
 import com.aomaoi.backend.repository.WorkerRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -29,14 +33,12 @@ public class WorkLogService {
 
     private final WorkLogRepository workLogRepository;
     private final WorkerRepository workerRepository;
-    private final com.aomaoi.backend.repository.FarmRepository farmRepository;
     private final com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository;
     private final AuditLogService auditLogService;
 
-    public WorkLogService(WorkLogRepository workLogRepository, WorkerRepository workerRepository, com.aomaoi.backend.repository.FarmRepository farmRepository, com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository, AuditLogService auditLogService) {
+    public WorkLogService(WorkLogRepository workLogRepository, WorkerRepository workerRepository, com.aomaoi.backend.repository.AdminProfileRepository adminProfileRepository, AuditLogService auditLogService) {
         this.workLogRepository = workLogRepository;
         this.workerRepository = workerRepository;
-        this.farmRepository = farmRepository;
         this.adminProfileRepository = adminProfileRepository;
         this.auditLogService = auditLogService;
     }
@@ -49,22 +51,20 @@ public class WorkLogService {
      * @return List ของ Map ที่มีข้อมูล id, type, date, workerId, total และฟิลด์เฉพาะประเภท
      */
     public List<Map<String, Object>> getAllLogs() {
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-
-        if (auth != null && auth.isAuthenticated() && !auth.getName().equals("superadmin") && !auth.getName().equals("anonymousUser")) {
-            String currentUsername = auth.getName();
-            return adminProfileRepository.findByUserUsername(currentUsername)
-                    .map(adminProfile -> (adminProfile.getFarmId() == null
-                            ? List.<WorkLog>of()
-                            : workLogRepository.findByWorkerFarmIdOrderByWorkDateDescIdDesc(adminProfile.getFarmId())).stream()
-                            .map(this::logToMap)
-                            .collect(Collectors.toList()))
-                    .orElseGet(() -> workLogRepository.findAllByOrderByWorkDateDescIdDesc().stream()
-                            .map(this::logToMap).collect(Collectors.toList()));
+        Authentication auth = requireAuthentication();
+        List<WorkLog> logs;
+        if (hasRole(auth, "SUPERADMIN")) {
+            logs = workLogRepository.findAllByOrderByWorkDateDescIdDesc();
+        } else if (hasRole(auth, "ADMIN")) {
+            logs = workLogRepository.findByWorkerFarmIdOrderByWorkDateDescIdDesc(requireAdminFarm(auth.getName()));
+        } else if (hasRole(auth, "WORKER")) {
+            Worker self = workerRepository.findByUserUsername(auth.getName())
+                    .orElseThrow(() -> new AccessDeniedException("Worker profile missing"));
+            logs = workLogRepository.findByWorkerIdOrderByWorkDateDescIdDesc(self.getId());
+        } else {
+            throw new AccessDeniedException("Unknown role");
         }
-
-        return workLogRepository.findAllByOrderByWorkDateDescIdDesc().stream()
-                .map(this::logToMap).collect(Collectors.toList());
+        return logs.stream().map(this::logToMap).collect(Collectors.toList());
     }
 
     /**
@@ -77,11 +77,23 @@ public class WorkLogService {
      * @param dto ข้อมูลบันทึกงานจาก Frontend
      * @return Map ข้อมูลบันทึกงานที่บันทึกสำเร็จ พร้อม id และ total ที่คำนวณแล้ว
      */
+    @Transactional
     public Map<String, Object> addLog(WorkLogRequestDTO dto) {
         validatePositive(dto);
-
-        Worker worker = workerRepository.findById(Long.parseLong(dto.getWorkerId()))
-                .orElseThrow(() -> new RuntimeException("Worker not found"));
+        Authentication auth = requireAuthentication();
+        if (!hasRole(auth, "ADMIN") && !hasRole(auth, "SUPERADMIN"))
+            throw new AccessDeniedException("Work log creation requires admin access");
+        Long workerId;
+        try {
+            workerId = Long.valueOf(dto.getWorkerId());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Valid workerId is required", e);
+        }
+        Worker worker = workerRepository.findLockedById(workerId)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Worker not found"));
+        if (hasRole(auth, "ADMIN") && (worker.getFarmId() == null
+                || !worker.getFarmId().equals(requireAdminFarm(auth.getName()))))
+            throw new AccessDeniedException("Worker is outside your farm");
 
         WorkLog log = new WorkLog();
         log.setWorker(worker);
@@ -101,16 +113,16 @@ public class WorkLogService {
         LocalDate end;
 
         if (dto.getStartDate() != null && !dto.getStartDate().isBlank()) {
-            start = LocalDate.parse(dto.getStartDate());
+            start = parseDate(dto.getStartDate());
             if (dto.getEndDate() != null && !dto.getEndDate().isBlank()) {
-                end = LocalDate.parse(dto.getEndDate());
+                end = parseDate(dto.getEndDate());
             } else {
                 end = start;
             }
         } else if (dto.getDate() != null && !dto.getDate().isBlank()) {
-            start = LocalDate.parse(dto.getDate());
+            start = parseDate(dto.getDate());
             if (dto.getEndDate() != null && !dto.getEndDate().isBlank()) {
-                end = LocalDate.parse(dto.getEndDate());
+                end = parseDate(dto.getEndDate());
             } else {
                 end = start;
             }
@@ -118,17 +130,17 @@ public class WorkLogService {
             start = LocalDate.now();
             end = start.plusDays(Math.max(0, dto.getDays() - 1));
         } else {
-            throw new RuntimeException("Date (or startDate and endDate) is required");
+            throw new IllegalArgumentException("Date (or startDate and endDate) is required");
         }
 
         if (end.isBefore(start)) {
-            throw new RuntimeException("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น");
+            throw new IllegalArgumentException("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น");
         }
 
         // ป้องกันไม่ให้มอบหมายงานประเภทเดียวกันให้คนงานคนเดิม 3 ครั้งในวันเดียวกัน
         long existingTaskCount = workLogRepository.countByWorkerIdAndTypeAndWorkDate(worker.getId(), dto.getType(), start);
         if (existingTaskCount >= 2) {
-            throw new RuntimeException("ไม่สามารถมอบหมายงานประเภทเดียวกัน (" + dto.getType() + ") ให้คนงานคนเดิม 3 ครั้งในวันเดียวกันได้ (Cannot assign the same task to the same worker three times on the same day)");
+            throw new IllegalArgumentException("ไม่สามารถมอบหมายงานประเภทเดียวกัน (" + dto.getType() + ") ให้คนงานคนเดิม 3 ครั้งในวันเดียวกันได้ (Cannot assign the same task to the same worker three times on the same day)");
         }
 
         log.setStartDate(start);
@@ -148,19 +160,8 @@ public class WorkLogService {
 
         WorkLog saved = workLogRepository.save(log);
 
-        // อัปเดตยอดค่าแรงรวมของฟาร์ม
-        if (worker.getFarmId() != null) {
-            com.aomaoi.backend.entity.Farm farm = this.farmRepository.findById(worker.getFarmId()).orElse(null);
-            if (farm != null) {
-                farm.setTotalWages(farm.getTotalWages() + log.getTotal().doubleValue());
-                farm.setMonthlyWages(farm.getMonthlyWages() + log.getTotal().doubleValue());
-                this.farmRepository.save(farm);
-            }
-        }
-
         // บันทึกประวัติลง Audit Log ว่า Admin คนไหนเพิ่มงานให้คนงานคนไหน
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        String currentUsername = (auth != null && auth.isAuthenticated() && !auth.getName().equals("anonymousUser")) ? auth.getName() : "system";
+        String currentUsername = auth.getName();
         String workerUsername = worker.getUser() != null ? worker.getUser().getUsername() : worker.getFullName();
         String details = String.format("Added %s work log for %s (Total: %s THB)", saved.getType(), worker.getFullName(), saved.getTotal());
         this.auditLogService.logAction("CREATE_WORKLOG", currentUsername, workerUsername, details);
@@ -184,27 +185,27 @@ public class WorkLogService {
     public BigDecimal calculateWage(WorkLogRequestDTO dto, Integer calculatedDays) {
         return switch (dto.getType()) {
             case "cutting" -> {
-                if (dto.getRows() == null || dto.getWaPerRow() == null)
-                    throw new RuntimeException("Cutting requires rows and waPerRow");
+                if (dto.getRows() == null || dto.getRows() <= 0 || dto.getWaPerRow() == null || dto.getWaPerRow() <= 0)
+                    throw new IllegalArgumentException("Cutting requires rows and waPerRow");
                 yield BigDecimal.valueOf((long) dto.getRows() * dto.getWaPerRow() * 2);
             }
             case "planting" -> {
-                if (dto.getFurrows() == null || dto.getWaPerFurrow() == null)
-                    throw new RuntimeException("Planting requires furrows and waPerFurrow");
-                yield BigDecimal.valueOf(dto.getFurrows() * dto.getWaPerFurrow() * 2.5);
+                if (dto.getFurrows() == null || dto.getFurrows() <= 0 || dto.getWaPerFurrow() == null || dto.getWaPerFurrow() <= 0)
+                    throw new IllegalArgumentException("Planting requires furrows and waPerFurrow");
+                yield BigDecimal.valueOf(dto.getFurrows()).multiply(BigDecimal.valueOf(dto.getWaPerFurrow())).multiply(new BigDecimal("2.5"));
             }
             case "watering" -> {
                 int days = calculatedDays != null ? calculatedDays : (dto.getDays() != null ? dto.getDays() : 0);
-                if (days == 0 || dto.getDailyRate() == null)
-                    throw new RuntimeException("Watering requires days and dailyRate");
+                if (days <= 0 || dto.getDailyRate() == null || dto.getDailyRate().signum() <= 0)
+                    throw new IllegalArgumentException("Watering requires days and dailyRate");
                 yield dto.getDailyRate().multiply(BigDecimal.valueOf(days));
             }
             case "spraying" -> {
-                if (dto.getTanks() == null)
-                    throw new RuntimeException("Spraying requires tanks");
+                if (dto.getTanks() == null || dto.getTanks() <= 0)
+                    throw new IllegalArgumentException("Spraying requires tanks");
                 yield BigDecimal.valueOf((long) dto.getTanks() * 150);
             }
-            default -> throw new RuntimeException("Unknown work type: " + dto.getType());
+            default -> throw new IllegalArgumentException("Unknown work type: " + dto.getType());
         };
     }
 
@@ -213,42 +214,47 @@ public class WorkLogService {
      * ป้องกันการส่งข้อมูลที่ไม่สมเหตุสมผลจาก Frontend หรือ API
      */
     private void validatePositive(WorkLogRequestDTO dto) {
+        if (dto == null || dto.getType() == null || dto.getType().isBlank())
+            throw new IllegalArgumentException("Work type is required");
         if (dto.getRows() != null && dto.getRows() < 0)
-            throw new RuntimeException("rows cannot be negative");
+            throw new IllegalArgumentException("rows cannot be negative");
         if (dto.getWaPerRow() != null && dto.getWaPerRow() < 0)
-            throw new RuntimeException("waPerRow cannot be negative");
+            throw new IllegalArgumentException("waPerRow cannot be negative");
         if (dto.getFurrows() != null && dto.getFurrows() < 0)
-            throw new RuntimeException("furrows cannot be negative");
+            throw new IllegalArgumentException("furrows cannot be negative");
         if (dto.getWaPerFurrow() != null && dto.getWaPerFurrow() < 0)
-            throw new RuntimeException("waPerFurrow cannot be negative");
+            throw new IllegalArgumentException("waPerFurrow cannot be negative");
         if (dto.getDays() != null && dto.getDays() < 0)
-            throw new RuntimeException("days cannot be negative");
+            throw new IllegalArgumentException("days cannot be negative");
         if (dto.getDailyRate() != null && dto.getDailyRate().compareTo(BigDecimal.ZERO) < 0)
-            throw new RuntimeException("dailyRate cannot be negative");
+            throw new IllegalArgumentException("dailyRate cannot be negative");
         if (dto.getTanks() != null && dto.getTanks() < 0)
-            throw new RuntimeException("tanks cannot be negative");
+            throw new IllegalArgumentException("tanks cannot be negative");
     }
 
-    /**
-     * คำนวณยอดค่าแรงรวมทั้งหมดตั้งแต่เริ่มระบบ
-     * @return ยอดค่าแรงรวมทั้งหมด (BigDecimal)
-     */
-    public BigDecimal getTotalAllTime() {
-        return workLogRepository.findAll().stream()
-                .map(WorkLog::getTotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    private LocalDate parseDate(String value) {
+        try {
+            return LocalDate.parse(value);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new IllegalArgumentException("Date must use yyyy-MM-dd", e);
+        }
     }
 
-    /**
-     * คำนวณยอดค่าแรงรวมของเดือนปัจจุบัน
-     * @return ยอดค่าแรงเดือนนี้ (BigDecimal)
-     */
-    public BigDecimal getTotalThisMonth() {
-        LocalDate startOfMonth = LocalDate.now().withDayOfMonth(1);
-        LocalDate today = LocalDate.now();
-        return workLogRepository.findByWorkDateBetween(startOfMonth, today).stream()
-                .map(WorkLog::getTotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    private Authentication requireAuthentication() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName()))
+            throw new AccessDeniedException("Authentication required");
+        return auth;
+    }
+
+    private boolean hasRole(Authentication auth, String role) {
+        return auth.getAuthorities().stream().anyMatch(a -> ("ROLE_" + role).equals(a.getAuthority()));
+    }
+
+    private Long requireAdminFarm(String username) {
+        return adminProfileRepository.findByUserUsername(username)
+                .map(profile -> profile.getFarmId())
+                .orElseThrow(() -> new AccessDeniedException("Admin has no farm"));
     }
 
     /**

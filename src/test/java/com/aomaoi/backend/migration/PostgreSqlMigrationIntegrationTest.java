@@ -8,10 +8,12 @@ import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -20,17 +22,29 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Each test owns an isolated schema in an explicitly configured PostgreSQL test database. */
-@EnabledIfEnvironmentVariable(named = "AOMAOI_MIGRATION_TEST_URL", matches = ".+")
+/** Each test owns an isolated schema in a disposable PostgreSQL container. */
 class PostgreSqlMigrationIntegrationTest {
     private static final Contexts SCHEMA_ONLY = new Contexts("production");
+    private static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:15-alpine")
+            .withDatabaseName("aomaoi_migration_test")
+            .withUsername("aomaoi_test")
+            .withPassword("aomaoi_test");
     private Connection connection;
     private String schema;
 
+    @BeforeAll
+    static void startPostgres() {
+        postgres.start();
+    }
+
+    @AfterAll
+    static void stopPostgres() {
+        postgres.stop();
+    }
+
     @BeforeEach
     void setUp() throws Exception {
-        connection = DriverManager.getConnection(System.getenv("AOMAOI_MIGRATION_TEST_URL"),
-                System.getenv("AOMAOI_MIGRATION_TEST_USER"), System.getenv("AOMAOI_MIGRATION_TEST_PASSWORD"));
+        connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
         schema = "migration_test_" + UUID.randomUUID().toString().replace("-", "");
         execute("CREATE SCHEMA " + schema);
         connection.setSchema(schema);
@@ -133,9 +147,9 @@ class PostgreSqlMigrationIntegrationTest {
     void applicationStartsWithLiquibaseSeedingAndHibernateSchemaValidation() throws Exception {
         try (var context = new SpringApplicationBuilder(BackendApplication.class).run(
                 "--server.port=0",
-                "--spring.datasource.url=" + System.getenv("AOMAOI_MIGRATION_TEST_URL"),
-                "--spring.datasource.username=" + System.getenv("AOMAOI_MIGRATION_TEST_USER"),
-                "--spring.datasource.password=" + System.getenv("AOMAOI_MIGRATION_TEST_PASSWORD"),
+                "--spring.datasource.url=" + postgres.getJdbcUrl(),
+                "--spring.datasource.username=" + postgres.getUsername(),
+                "--spring.datasource.password=" + postgres.getPassword(),
                 "--spring.datasource.hikari.schema=" + schema,
                 "--spring.liquibase.default-schema=" + schema,
                 "--spring.jpa.properties.hibernate.default_schema=" + schema,
@@ -147,6 +161,7 @@ class PostgreSqlMigrationIntegrationTest {
                 "--app.bootstrap-admin-password=integration-test-password",
                 "--app.migration-job=false",
                 "--app.e2e.support-key=integration-test-support-key-at-least-32-characters",
+                "--jwt.secret=integration-test-jwt-secret-at-least-32-characters",
                 "--spring.jpa.show-sql=false",
                 "--logging.level.org.springframework.security=INFO")) {
             assertTrue(context.isActive());

@@ -17,10 +17,10 @@ public class Farm {
     @Column(columnDefinition = "TEXT")
     private String image;
     
-    private Integer workerCount = 0;
-    private Integer adminCount = 0;
-    private Double monthlyWages = 0.0;
-    private Double totalWages = 0.0;
+    @Transient private Integer workerCount = 0;
+    @Transient private Integer adminCount = 0;
+    @Transient private Double monthlyWages = 0.0;
+    @Transient private Double totalWages = 0.0;
     private String status = "active";
     private LocalDate joinedDate;
 

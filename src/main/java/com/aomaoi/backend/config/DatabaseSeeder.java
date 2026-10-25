@@ -36,15 +36,14 @@ public class DatabaseSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         // 1. Super Admin account
-        if (!demoData && userRepository.findByUsername("superadmin").isPresent()) {
-            return;
+        if (userRepository.findByUsername("superadmin").isEmpty()) {
+            User superAdmin = new User();
+            superAdmin.setUsername("superadmin");
+            superAdmin.setPassword(passwordEncoder.encode(bootstrapAdminPassword));
+            superAdmin.setRole("superadmin");
+            superAdmin.setIsFirstLogin(false);
+            userRepository.save(superAdmin);
         }
-        User superAdmin = userRepository.findByUsername("superadmin").orElseGet(User::new);
-        superAdmin.setUsername("superadmin");
-        superAdmin.setPassword(passwordEncoder.encode(bootstrapAdminPassword));
-        superAdmin.setRole("superadmin");
-        superAdmin.setIsFirstLogin(false);
-        userRepository.save(superAdmin);
         if (!demoData) {
             return;
         }
@@ -56,10 +55,6 @@ public class DatabaseSeeder implements CommandLineRunner {
             farm.setName("ไร่อ้อยอุดมทรัพย์ (Udomsap Sugarcane Farm)");
             farm.setLocation("กาญจนบุรี (Kanchanaburi)");
             farm.setStatus("active");
-            farm.setWorkerCount(2);
-            farm.setAdminCount(1);
-            farm.setMonthlyWages(4550.0);
-            farm.setTotalWages(4550.0);
             farm.setJoinedDate(java.time.LocalDate.now().minusMonths(3));
             farm = farmRepository.save(farm);
         } else {
@@ -67,12 +62,14 @@ public class DatabaseSeeder implements CommandLineRunner {
         }
 
         // 3. Admin Account & Profile
-        User adminUser = userRepository.findByUsername("admin1").orElseGet(User::new);
-        adminUser.setUsername("admin1");
-        adminUser.setPassword(passwordEncoder.encode("1234"));
-        adminUser.setRole("admin");
-        adminUser.setIsFirstLogin(false);
-        adminUser = userRepository.save(adminUser);
+        User adminUser = userRepository.findByUsername("admin1").orElseGet(() -> {
+            User created = new User();
+            created.setUsername("admin1");
+            created.setPassword(passwordEncoder.encode("1234"));
+            created.setRole("admin");
+            created.setIsFirstLogin(false);
+            return userRepository.save(created);
+        });
 
         if (adminProfileRepository.findByUserUsername("admin1").isEmpty()) {
             com.aomaoi.backend.entity.AdminProfile adminProfile = new com.aomaoi.backend.entity.AdminProfile();
@@ -86,12 +83,14 @@ public class DatabaseSeeder implements CommandLineRunner {
         }
 
         // 4. Worker 1 Account & Profile
-        User workerUser1 = userRepository.findByUsername("worker1").orElseGet(User::new);
-        workerUser1.setUsername("worker1");
-        workerUser1.setPassword(passwordEncoder.encode("1234"));
-        workerUser1.setRole("worker");
-        workerUser1.setIsFirstLogin(false);
-        workerUser1 = userRepository.save(workerUser1);
+        User workerUser1 = userRepository.findByUsername("worker1").orElseGet(() -> {
+            User created = new User();
+            created.setUsername("worker1");
+            created.setPassword(passwordEncoder.encode("1234"));
+            created.setRole("worker");
+            created.setIsFirstLogin(false);
+            return userRepository.save(created);
+        });
 
         com.aomaoi.backend.entity.Worker worker1 = workerRepository.findByUserUsername("worker1").orElse(null);
         if (worker1 == null) {
@@ -107,12 +106,14 @@ public class DatabaseSeeder implements CommandLineRunner {
         }
 
         // 5. Worker 2 Account & Profile
-        User workerUser2 = userRepository.findByUsername("worker2").orElseGet(User::new);
-        workerUser2.setUsername("worker2");
-        workerUser2.setPassword(passwordEncoder.encode("1234"));
-        workerUser2.setRole("worker");
-        workerUser2.setIsFirstLogin(false);
-        workerUser2 = userRepository.save(workerUser2);
+        User workerUser2 = userRepository.findByUsername("worker2").orElseGet(() -> {
+            User created = new User();
+            created.setUsername("worker2");
+            created.setPassword(passwordEncoder.encode("1234"));
+            created.setRole("worker");
+            created.setIsFirstLogin(false);
+            return userRepository.save(created);
+        });
 
         com.aomaoi.backend.entity.Worker worker2 = workerRepository.findByUserUsername("worker2").orElse(null);
         if (worker2 == null) {
@@ -179,10 +180,5 @@ public class DatabaseSeeder implements CommandLineRunner {
             workLogRepository.save(sprayingLog);
         }
 
-        System.out.println("🌱 Database Seeded with all 4 task types (Cutting, Planting, Watering, Spraying):");
-        System.out.println("   - superadmin / 1234 (role: superadmin)");
-        System.out.println("   - admin1 / 1234 (role: admin, farm: " + farm.getName() + ")");
-        System.out.println("   - worker1 / 1234 (role: worker, Cutting & Planting logs)");
-        System.out.println("   - worker2 / 1234 (role: worker, Watering & Spraying logs)");
     }
 }

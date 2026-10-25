@@ -5,6 +5,8 @@ import com.aomaoi.backend.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+import org.springframework.security.core.AuthenticationException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,11 +35,11 @@ public class AuthController {
      * Response 401: { "success": false, "message": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" }
      */
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody LoginRequest credentials) {
+    public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest credentials) {
         try {
             Map<String, Object> response = authService.login(credentials);
             return ResponseEntity.ok(response);
-        } catch (Exception e) {
+        } catch (AuthenticationException e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("message", "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
@@ -57,7 +59,7 @@ public class AuthController {
      */
     @PostMapping("/change-password")
     public ResponseEntity<Map<String, Object>> changePassword(
-            @RequestBody com.aomaoi.backend.dto.ChangePasswordRequest request,
+            @Valid @RequestBody com.aomaoi.backend.dto.ChangePasswordRequest request,
             org.springframework.security.core.Authentication authentication) {
         
         String username = authentication.getName();
@@ -66,6 +68,7 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", "Password changed successfully");
+        response.put("token", authService.refreshToken(username));
         return ResponseEntity.ok(response);
     }
 }

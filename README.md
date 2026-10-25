@@ -248,16 +248,13 @@ chmod +x mvnw
 ./mvnw test
 ```
 
-Migration integration test ต้องใช้ PostgreSQL test database ที่แยกจากฐานข้อมูลจริง โดยตั้ง `AOMAOI_MIGRATION_TEST_URL`, `AOMAOI_MIGRATION_TEST_USER` และ `AOMAOI_MIGRATION_TEST_PASSWORD` ก่อนรัน:
+Migration integration test ใช้ Testcontainers สร้าง PostgreSQL 15 ชั่วคราวโดยอัตโนมัติเมื่อรัน Maven จึงต้องเปิด Docker Desktop แต่ไม่ต้องสร้างฐานข้อมูลหรือกำหนดตัวแปรสภาพแวดล้อมเอง:
 
 ```powershell
-$env:AOMAOI_MIGRATION_TEST_URL = "jdbc:postgresql://localhost:5434/aomaoi_test"
-$env:AOMAOI_MIGRATION_TEST_USER = "aomaoi_user"
-$env:AOMAOI_MIGRATION_TEST_PASSWORD = "aomaoi_password"
 .\mvnw.cmd -Dtest=PostgreSqlMigrationIntegrationTest test
 ```
 
-ถ้าไม่ได้กำหนด test database การทดสอบ migration บางส่วนจะถูก skip โดยตั้งใจ อย่าชี้ตัวแปรนี้ไปยังฐานข้อมูล production
+Testcontainers จะหยุดและลบ container ทดสอบเมื่อชุดทดสอบจบ การทดสอบไม่เชื่อมต่อฐานข้อมูลหลักหรือ Supabase ถ้า Docker ไม่พร้อม test จะล้มพร้อมสาเหตุแทนการข้ามเงียบ ๆ
 
 ### Cypress E2E
 

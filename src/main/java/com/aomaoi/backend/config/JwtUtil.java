@@ -9,6 +9,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Base64;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import jakarta.annotation.PostConstruct;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,15 +30,22 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private long expirationTime;
 
+    @PostConstruct
+    void validateSecret() {
+        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32)
+            throw new IllegalStateException("JWT_SECRET must contain at least 32 UTF-8 bytes");
+    }
+
     // Creates the cryptographic signing key
     private Key getSigningKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes());
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     // 1. Generate a new Token (Called when a user logs in successfully)
     public String generateToken(UserDetails userDetails, String role) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", role); // We embed the user's role directly into the token!
+        claims.put("credentialVersion", credentialVersion(userDetails));
 
         return Jwts.builder()
                 .setClaims(claims)
@@ -57,7 +70,23 @@ public class JwtUtil {
     // 4. Validate if the Token is real and hasn't expired
     public boolean validateToken(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
-        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+        String issuedVersion = (String) extractAllClaims(token).get("credentialVersion");
+        String currentVersion = credentialVersion(userDetails);
+        return userDetails.isEnabled() && username.equals(userDetails.getUsername())
+                && issuedVersion != null && MessageDigest.isEqual(
+                    issuedVersion.getBytes(StandardCharsets.UTF_8), currentVersion.getBytes(StandardCharsets.UTF_8))
+                && !isTokenExpired(token);
+    }
+
+    private String credentialVersion(UserDetails userDetails) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    mac.doFinal(userDetails.getPassword().getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot create credential version", e);
+        }
     }
 
     private boolean isTokenExpired(String token) {

@@ -56,7 +56,7 @@ class AuthControllerTest {
 
     @Test
     void login_Failure_Returns401() {
-        when(authService.login(loginRequest)).thenThrow(new RuntimeException("Bad credentials"));
+        when(authService.login(loginRequest)).thenThrow(new org.springframework.security.authentication.BadCredentialsException("Bad credentials"));
 
         ResponseEntity<Map<String, Object>> response = authController.login(loginRequest);
 
@@ -75,6 +75,7 @@ class AuthControllerTest {
         Authentication auth = new UsernamePasswordAuthenticationToken("testuser", "password");
 
         doNothing().when(authService).changePassword("testuser", "oldpassword", "newpassword");
+        when(authService.refreshToken("testuser")).thenReturn("fresh_token");
 
         ResponseEntity<Map<String, Object>> response = authController.changePassword(request, auth);
 
@@ -82,6 +83,7 @@ class AuthControllerTest {
         assertNotNull(response.getBody());
         assertEquals(true, response.getBody().get("success"));
         assertEquals("Password changed successfully", response.getBody().get("message"));
+        assertEquals("fresh_token", response.getBody().get("token"));
         verify(authService).changePassword("testuser", "oldpassword", "newpassword");
     }
 }

@@ -4,11 +4,10 @@ import com.aomaoi.backend.entity.AdminProfile;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface AdminProfileRepository extends JpaRepository<AdminProfile, Long> {
-    List<AdminProfile> findByStatus(String status);
     Optional<AdminProfile> findByUserUsername(String username);
+    long countByFarmIdAndStatusNot(Long farmId, String status);
 }

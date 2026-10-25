@@ -53,6 +53,16 @@ class JwtUtilTest {
     }
 
     @Test
+    void testValidateToken_RejectsPasswordChangeAndDisabledAccount() {
+        String token = jwtUtil.generateToken(userDetails, "WORKER");
+        UserDetails changedPassword = new User("testuser", "new_password_hash", Collections.emptyList());
+        assertFalse(jwtUtil.validateToken(token, changedPassword));
+        UserDetails disabled = new User("testuser", "password", false, true, true, true,
+                Collections.emptyList());
+        assertFalse(jwtUtil.validateToken(token, disabled));
+    }
+
+    @Test
     void testValidateToken_ExpiredToken_ThrowsExpiredJwtException() {
         JwtUtil expiredJwtUtil = new JwtUtil();
         ReflectionTestUtils.setField(expiredJwtUtil, "secret", "aomaoi_super_secret_key_for_farm_accounting_system_make_it_long");

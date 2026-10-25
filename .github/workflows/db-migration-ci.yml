@@ -25,21 +25,6 @@ jobs:
     name: Validate and Test Liquibase Migration
     runs-on: ubuntu-24.04
 
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_DB: aomaoi_db
-          POSTGRES_USER: aomaoi_user
-          POSTGRES_PASSWORD: aomaoi_password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U aomaoi_user -d aomaoi_db"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
@@ -52,10 +37,6 @@ jobs:
           cache: maven
 
       - name: Test PostgreSQL schema, rollback, and Hibernate validation
-        env:
-          AOMAOI_MIGRATION_TEST_URL: jdbc:postgresql://localhost:5432/aomaoi_db
-          AOMAOI_MIGRATION_TEST_USER: aomaoi_user
-          AOMAOI_MIGRATION_TEST_PASSWORD: aomaoi_password
         run: |
           chmod +x mvnw
           ./mvnw -Dtest=PostgreSqlMigrationIntegrationTest test

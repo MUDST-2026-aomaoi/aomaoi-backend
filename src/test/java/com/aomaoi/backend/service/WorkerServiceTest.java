@@ -70,6 +70,8 @@ class WorkerServiceTest {
         worker.setFarmId(10L);
         worker.setStatus("active");
         worker.setUser(user);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "superadmin", "pass", List.of(new SimpleGrantedAuthority("ROLE_SUPERADMIN"))));
     }
 
     @AfterEach
@@ -103,15 +105,6 @@ class WorkerServiceTest {
         assertEquals(1, result.size());
         verify(workerRepository, never()).findAll();
         assertEquals(10L, result.get(0).getFarmId());
-    }
-
-    @Test
-    void getActiveWorkers() {
-        when(workerRepository.findByStatus("active")).thenReturn(List.of(worker));
-
-        List<Worker> result = workerService.getActiveWorkers();
-
-        assertEquals(1, result.size());
     }
 
     @Test
@@ -163,6 +156,8 @@ class WorkerServiceTest {
     void addWorker_DuplicateUsername_ThrowsException() {
         WorkerRequestDTO dto = new WorkerRequestDTO();
         dto.setUsername("duplicate");
+        dto.setTempPassword("pass123");
+        dto.setFullName("Duplicate Worker");
 
         when(userRepository.existsByUsername("duplicate")).thenReturn(true);
 
@@ -170,7 +165,7 @@ class WorkerServiceTest {
     }
 
     @Test
-    void addWorker_WithAdminAuth_AssignsFarmAndIncrementsWorkerCount() {
+    void addWorker_WithAdminAuth_AssignsFarm() {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")))
         );
@@ -178,17 +173,12 @@ class WorkerServiceTest {
         AdminProfile adminProfile = new AdminProfile();
         adminProfile.setFarmId(5L);
 
-        Farm farm = new Farm();
-        farm.setId(5L);
-        farm.setWorkerCount(2);
-
         WorkerRequestDTO dto = new WorkerRequestDTO();
         dto.setUsername("worker_with_farm");
-        dto.setTempPassword("pass");
+        dto.setTempPassword("pass123");
         dto.setFullName("Farm Worker");
 
         when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));
-        when(farmRepository.findById(5L)).thenReturn(Optional.of(farm));
         when(userRepository.existsByUsername("worker_with_farm")).thenReturn(false);
         when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
         when(workerRepository.save(any(Worker.class))).thenAnswer(i -> i.getArgument(0));
@@ -196,8 +186,6 @@ class WorkerServiceTest {
         Worker created = workerService.addWorker(dto);
 
         assertEquals(5L, created.getFarmId());
-        assertEquals(3, farm.getWorkerCount());
-        verify(farmRepository).save(farm);
     }
 
     @Test
@@ -251,6 +239,8 @@ class WorkerServiceTest {
 
     @Test
     void resetWorkerPassword_AdminSameFarm_Success() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
         AdminProfile adminProfile = new AdminProfile();
         adminProfile.setFarmId(10L);
 
@@ -271,6 +261,8 @@ class WorkerServiceTest {
 
     @Test
     void resetWorkerPassword_DifferentFarm_ThrowsAccessDeniedException() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
         AdminProfile adminProfile = new AdminProfile();
         adminProfile.setFarmId(99L); // Different from worker's farmId "10"
 
@@ -287,6 +279,20 @@ class WorkerServiceTest {
 
         assertThrows(RuntimeException.class,
                 () -> workerService.resetWorkerPassword(99L, "newpass123", "adminuser"));
+    }
+
+    @Test
+    void updateWorker_AdminCannotEditAnotherFarm() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        AdminProfile profile = new AdminProfile();
+        profile.setFarmId(99L);
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(profile));
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> workerService.updateWorker(1L, new WorkerRequestDTO()));
+        verify(workerRepository, never()).save(any());
     }
 }
 

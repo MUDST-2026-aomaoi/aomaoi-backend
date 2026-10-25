@@ -3,6 +3,7 @@ package com.aomaoi.backend.dto;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import jakarta.validation.constraints.NotBlank;
 
 /**
  * WorkLogRequestDTO - DTO สำหรับรับข้อมูลการบันทึกงานจาก Frontend
@@ -16,13 +17,13 @@ import java.math.BigDecimal;
 @Data
 public class WorkLogRequestDTO {
     /** ประเภทงาน: cutting, planting, watering, spraying */
-    private String type;
+    @NotBlank private String type;
 
     /** วันที่บันทึกงาน (yyyy-MM-dd) - รองรับงานวันเดียว หรือส่ง startDate/endDate แทนได้ */
     private String date;
 
     /** ID ของคนงาน */
-    private String workerId;
+    @NotBlank private String workerId;
 
     // === ฟิลด์ช่วงวันที่ทำงานสำหรับทุกประเภทงาน ===
     /** วันเริ่มต้นทำงาน (yyyy-MM-dd) */

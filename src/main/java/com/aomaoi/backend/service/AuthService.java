@@ -9,6 +9,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -38,9 +39,6 @@ public class AuthService {
         UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
         User user = userRepository.findByUsername(request.getUsername()).get();
 
-        // 3. Generate the JWT Token (embedding their role)
-        String token = jwtUtil.generateToken(userDetails, user.getRole());
-
         // 4. Format the JSON response exactly how the React frontend expects it!
         Map<String, Object> response = new HashMap<>();
         Map<String, Object> userData = new HashMap<>();
@@ -59,7 +57,7 @@ public class AuthService {
             var adminOpt = adminProfileRepository.findByUserUsername(user.getUsername());
             if (adminOpt.isPresent()) {
                 if ("inactive".equals(adminOpt.get().getStatus())) {
-                    throw new RuntimeException("Admin is inactive");
+                    throw new BadCredentialsException("Admin is inactive");
                 }
                 fullName = adminOpt.get().getFullName();
                 actualId = adminOpt.get().getId();
@@ -69,7 +67,7 @@ public class AuthService {
             var workerOpt = workerRepository.findByUserUsername(user.getUsername());
             if (workerOpt.isPresent()) {
                 if ("inactive".equals(workerOpt.get().getStatus())) {
-                    throw new RuntimeException("Worker is inactive");
+                    throw new BadCredentialsException("Worker is inactive");
                 }
                 fullName = workerOpt.get().getFullName();
                 actualId = workerOpt.get().getId();
@@ -84,7 +82,7 @@ public class AuthService {
         }
         
         response.put("success", true);
-        response.put("token", token);
+        response.put("token", jwtUtil.generateToken(userDetails, user.getRole()));
         response.put("user", userData);
 
         return response;
@@ -92,11 +90,13 @@ public class AuthService {
 
     @Transactional
     public void changePassword(String username, String oldPassword, String newPassword) {
+        if (newPassword == null || newPassword.length() < 6 || newPassword.isBlank())
+            throw new IllegalArgumentException("New password must be at least 6 characters");
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
                 
         if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
-            throw new RuntimeException("รหัสผ่านเดิมไม่ถูกต้อง");
+            throw new IllegalArgumentException("รหัสผ่านเดิมไม่ถูกต้อง");
         }
         
         user.setPassword(passwordEncoder.encode(newPassword));
@@ -122,6 +122,13 @@ public class AuthService {
             username,
             "User changed own password"
         );
+    }
+
+    public String refreshToken(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        UserDetails details = userDetailsService.loadUserByUsername(username);
+        return jwtUtil.generateToken(details, user.getRole());
     }
 }
 

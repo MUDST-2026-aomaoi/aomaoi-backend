@@ -4,6 +4,7 @@ import com.aomaoi.backend.dto.WorkLogRequestDTO;
 import com.aomaoi.backend.service.WorkLogService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Map;
@@ -49,7 +50,7 @@ public class WorkLogController {
      * Response 200: { "id", "type", "date", "workerId", "total", "days", "startDate", "endDate", ... }
      */
     @PostMapping
-    public ResponseEntity<Map<String, Object>> addLog(@RequestBody WorkLogRequestDTO dto) {
+    public ResponseEntity<Map<String, Object>> addLog(@Valid @RequestBody WorkLogRequestDTO dto) {
         return ResponseEntity.ok(workLogService.addLog(dto));
     }
 }

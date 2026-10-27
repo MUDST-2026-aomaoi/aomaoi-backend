@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Collection;
 import java.math.BigDecimal;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,6 +27,14 @@ public interface WorkLogRepository extends JpaRepository<WorkLog, Long> {
     List<WorkLog> findByWorkDateBetween(LocalDate start, LocalDate end);
 
     List<WorkLog> findAllByOrderByWorkDateDescIdDesc();
+
+    @Query("select w.worker.id, sum(w.total) from WorkLog w "
+            + "where w.worker.id in :workerIds group by w.worker.id")
+    List<Object[]> totalsByWorkerIds(@Param("workerIds") Collection<Long> workerIds);
+
+    @Query("select w.type, count(w) from WorkLog w "
+            + "where w.worker.id in :workerIds group by w.type")
+    List<Object[]> countsByTypeForWorkerIds(@Param("workerIds") Collection<Long> workerIds);
 
     long countByWorkerIdAndTypeAndWorkDate(Long workerId, String type, LocalDate workDate);
 }

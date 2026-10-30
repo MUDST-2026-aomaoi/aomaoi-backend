@@ -2,6 +2,7 @@ package com.aomaoi.backend.service;
 
 import com.aomaoi.backend.config.JwtUtil;
 import com.aomaoi.backend.dto.LoginRequest;
+import com.aomaoi.backend.dto.AuthResponseDTO;
 import com.aomaoi.backend.entity.AdminProfile;
 import com.aomaoi.backend.entity.User;
 import com.aomaoi.backend.entity.Worker;
@@ -101,15 +102,12 @@ class AuthServiceTest {
         when(userRepository.findByUsername("superadmin")).thenReturn(Optional.of(superadminUser));
         when(jwtUtil.generateToken(any(), eq("superadmin"))).thenReturn("mock_token");
 
-        Map<String, Object> result = authService.login(request);
+        AuthResponseDTO result = authService.login(request);
 
-        assertTrue((Boolean) result.get("success"));
-        assertEquals("mock_token", result.get("token"));
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> userMap = (Map<String, Object>) result.get("user");
-        assertEquals("superadmin", userMap.get("fullName"));
-        assertEquals("superadmin", userMap.get("role"));
+        assertTrue(result.success());
+        assertEquals("mock_token", result.token());
+        assertEquals("superadmin", result.user().fullName());
+        assertEquals("superadmin", result.user().role());
     }
 
     @Test
@@ -128,14 +126,12 @@ class AuthServiceTest {
         when(jwtUtil.generateToken(any(), eq("admin"))).thenReturn("mock_token");
         when(adminProfileRepository.findByUserUsername("admin1")).thenReturn(Optional.of(profile));
 
-        Map<String, Object> result = authService.login(request);
+        AuthResponseDTO result = authService.login(request);
 
-        assertTrue((Boolean) result.get("success"));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> userMap = (Map<String, Object>) result.get("user");
-        assertEquals("Admin Name", userMap.get("fullName"));
-        assertEquals(10L, userMap.get("id"));
-        assertEquals("avatar.png", userMap.get("avatar"));
+        assertTrue(result.success());
+        assertEquals("Admin Name", result.user().fullName());
+        assertEquals(10L, result.user().id());
+        assertEquals("avatar.png", result.user().avatar());
     }
 
     @Test
@@ -154,13 +150,11 @@ class AuthServiceTest {
         when(jwtUtil.generateToken(any(), eq("worker"))).thenReturn("mock_token");
         when(workerRepository.findByUserUsername("worker1")).thenReturn(Optional.of(worker));
 
-        Map<String, Object> result = authService.login(request);
+        AuthResponseDTO result = authService.login(request);
 
-        assertTrue((Boolean) result.get("success"));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> userMap = (Map<String, Object>) result.get("user");
-        assertEquals("Worker Name", userMap.get("fullName"));
-        assertEquals(20L, userMap.get("id"));
+        assertTrue(result.success());
+        assertEquals("Worker Name", result.user().fullName());
+        assertEquals(20L, result.user().id());
     }
 
     @Test
@@ -172,7 +166,8 @@ class AuthServiceTest {
         when(userDetailsService.loadUserByUsername("unknown")).thenReturn(userDetails);
         when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
 
-        assertThrows(NoSuchElementException.class, () -> authService.login(request));
+        assertThrows(org.springframework.security.authentication.BadCredentialsException.class,
+                () -> authService.login(request));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.aomaoi.backend.service;
 
 import com.aomaoi.backend.dto.WorkLogRequestDTO;
+import com.aomaoi.backend.dto.WorkLogResponseDTO;
 import com.aomaoi.backend.entity.AdminProfile;
 import com.aomaoi.backend.entity.WorkLog;
 import com.aomaoi.backend.entity.Worker;
@@ -79,11 +80,11 @@ class WorkLogServiceTest {
     void getAllLogs_Superadmin_ReturnsAll() {
         when(workLogRepository.findAllByOrderByWorkDateDescIdDesc()).thenReturn(List.of(workLog));
 
-        List<Map<String, Object>> result = workLogService.getAllLogs();
+        List<WorkLogResponseDTO> result = workLogService.getAllLogs();
 
         assertEquals(1, result.size());
-        assertEquals("100", result.get(0).get("id"));
-        assertEquals("cutting", result.get(0).get("type"));
+        assertEquals("100", result.get(0).id());
+        assertEquals("cutting", result.get(0).type());
     }
 
     @Test
@@ -98,10 +99,24 @@ class WorkLogServiceTest {
         when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));
         when(workLogRepository.findByWorkerFarmIdOrderByWorkDateDescIdDesc(10L)).thenReturn(List.of(workLog));
 
-        List<Map<String, Object>> result = workLogService.getAllLogs();
+        List<WorkLogResponseDTO> result = workLogService.getAllLogs();
 
         assertEquals(1, result.size());
         verify(workLogRepository, never()).findAllByOrderByWorkDateDescIdDesc();
+    }
+
+    @Test
+    void getAllLogs_InactiveAdminIsDenied() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("adminuser", "pass",
+                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        AdminProfile profile = new AdminProfile();
+        profile.setFarmId(10L);
+        profile.setStatus("inactive");
+        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(profile));
+
+        assertThrows(AccessDeniedException.class, () -> workLogService.getAllLogs());
+        verify(workLogRepository, never()).findByWorkerFarmIdOrderByWorkDateDescIdDesc(anyLong());
     }
 
     @Test
@@ -112,10 +127,10 @@ class WorkLogServiceTest {
         when(workerRepository.findByUserUsername("workeruser")).thenReturn(Optional.of(worker));
         when(workLogRepository.findByWorkerIdOrderByWorkDateDescIdDesc(1L)).thenReturn(List.of(workLog));
 
-        List<Map<String, Object>> result = workLogService.getAllLogs();
+        List<WorkLogResponseDTO> result = workLogService.getAllLogs();
 
         assertEquals(1, result.size());
-        assertEquals("100", result.get(0).get("id"));
+        assertEquals("100", result.get(0).id());
         verify(workLogRepository).findByWorkerIdOrderByWorkDateDescIdDesc(1L);
     }
 
@@ -331,10 +346,10 @@ class WorkLogServiceTest {
             return log;
         });
 
-        Map<String, Object> result = workLogService.addLog(dto);
+        WorkLogResponseDTO result = workLogService.addLog(dto);
 
         assertNotNull(result);
-        assertEquals("100", result.get("id"));
+        assertEquals("100", result.id());
     }
 
     @Test
@@ -384,11 +399,11 @@ class WorkLogServiceTest {
             return log;
         });
 
-        Map<String, Object> result = workLogService.addLog(dto);
+        WorkLogResponseDTO result = workLogService.addLog(dto);
 
         assertNotNull(result);
-        assertEquals(3, result.get("days")); // 1st, 2nd, 3rd = 3 days
-        assertEquals(900.0, result.get("total"));
+        assertEquals(3, result.days()); // 1st, 2nd, 3rd = 3 days
+        assertEquals(new BigDecimal("900"), result.total());
     }
 
     @Test
@@ -421,11 +436,11 @@ class WorkLogServiceTest {
             return log;
         });
 
-        Map<String, Object> result = workLogService.addLog(dto);
+        WorkLogResponseDTO result = workLogService.addLog(dto);
 
         assertNotNull(result);
-        assertEquals(2, result.get("days"));
-        assertEquals(500.0, result.get("total"));
+        assertEquals(2, result.days());
+        assertEquals(new BigDecimal("500"), result.total());
     }
 
     @Test
@@ -444,12 +459,12 @@ class WorkLogServiceTest {
             return log;
         });
 
-        Map<String, Object> result = workLogService.addLog(dto);
+        WorkLogResponseDTO result = workLogService.addLog(dto);
 
-        assertEquals("2026-10-01", result.get("startDate"));
-        assertEquals("2026-10-01", result.get("endDate"));
-        assertEquals(1, result.get("days"));
-        assertEquals(250.0, result.get("total"));
+        assertEquals("2026-10-01", result.startDate());
+        assertEquals("2026-10-01", result.endDate());
+        assertEquals(1, result.days());
+        assertEquals(new BigDecimal("250"), result.total());
     }
 
     @Test
@@ -494,12 +509,12 @@ class WorkLogServiceTest {
             return log;
         });
 
-        Map<String, Object> result = workLogService.addLog(dto);
+        WorkLogResponseDTO result = workLogService.addLog(dto);
 
         assertNotNull(result);
-        assertEquals("2026-10-12", result.get("startDate"));
-        assertEquals("2026-10-12", result.get("endDate"));
-        assertEquals("2026-10-12", result.get("date"));
+        assertEquals("2026-10-12", result.startDate());
+        assertEquals("2026-10-12", result.endDate());
+        assertEquals("2026-10-12", result.date());
     }
 
     @Test
@@ -518,12 +533,12 @@ class WorkLogServiceTest {
             return log;
         });
 
-        Map<String, Object> result = workLogService.addLog(dto);
+        WorkLogResponseDTO result = workLogService.addLog(dto);
 
         assertNotNull(result);
-        assertEquals("2026-10-10", result.get("startDate"));
-        assertEquals("2026-10-12", result.get("endDate"));
-        assertEquals(3, result.get("days")); // 10, 11, 12 = 3 days
+        assertEquals("2026-10-10", result.startDate());
+        assertEquals("2026-10-12", result.endDate());
+        assertEquals(3, result.days()); // 10, 11, 12 = 3 days
     }
 
     @Test

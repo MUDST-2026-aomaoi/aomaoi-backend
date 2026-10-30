@@ -100,9 +100,36 @@ class PostgreSqlMigrationIntegrationTest {
                 + " VALUES (1,CURRENT_DATE,'CASH',-1,'admin')"));
         assertThrows(SQLException.class, () -> execute("INSERT INTO salary_advances(worker_id,advance_date,type,amount,recorded_by)"
                 + " VALUES (1,CURRENT_DATE,'GOODS',5,'admin')"));
+        assertThrows(SQLException.class, () -> execute("INSERT INTO salary_advances(worker_id,advance_date,type,amount,item_name,recorded_by)"
+                + " VALUES (1,CURRENT_DATE,'CASH',5,'fertilizer','admin')"));
+        assertThrows(SQLException.class, () -> execute("INSERT INTO salary_advances(worker_id,advance_date,type,amount,item_name,recorded_by)"
+                + " VALUES (1,CURRENT_DATE,'GOODS',5,repeat('x',256),'admin')"));
+        assertThrows(SQLException.class, () -> execute("INSERT INTO salary_advances(worker_id,advance_date,type,amount,recorded_by,cancelled_at)"
+                + " VALUES (1,CURRENT_DATE,'CASH',5,'admin',CURRENT_TIMESTAMP)"));
         assertThrows(SQLException.class, () -> execute("UPDATE worker SET farm_id = NULL WHERE id = 1"));
         assertThrows(SQLException.class, () -> execute("DELETE FROM farm WHERE id = 1"));
         assertThrows(SQLException.class, () -> execute("DELETE FROM worker WHERE id = 1"));
+    }
+
+    @Test
+    void workerFarmCanChangeOnlyBeforeFinancialHistoryExists() throws Exception {
+        liquibase().update(SCHEMA_ONLY, new LabelExpression());
+        insertRecords();
+        long secondFarmId = scalarLong(
+                "INSERT INTO farm(name,location) VALUES ('Second farm','test') RETURNING id");
+        long noHistoryWorkerId = scalarLong("INSERT INTO worker(full_name,nickname,farm_id,status) "
+                + "VALUES ('Movable worker','movable',1,'active') RETURNING id");
+
+        execute("UPDATE worker SET farm_id = " + secondFarmId + " WHERE id = " + noHistoryWorkerId);
+        assertEquals(Long.toString(secondFarmId), scalar("SELECT farm_id FROM worker WHERE id = " + noHistoryWorkerId));
+        assertSqlFailureAndRecover("UPDATE worker SET farm_id = " + secondFarmId + " WHERE id = 1");
+
+        long advanceOnlyWorkerId = scalarLong("INSERT INTO worker(full_name,nickname,farm_id,status) "
+                + "VALUES ('Advance worker','advance',1,'active') RETURNING id");
+        execute("INSERT INTO salary_advances(worker_id,advance_date,type,amount,recorded_by) "
+                + "VALUES (" + advanceOnlyWorkerId + ",CURRENT_DATE,'CASH',10,'admin')");
+        assertSqlFailureAndRecover(
+                "UPDATE worker SET farm_id = " + secondFarmId + " WHERE id = " + advanceOnlyWorkerId);
     }
 
     @Test
@@ -196,6 +223,14 @@ class PostgreSqlMigrationIntegrationTest {
                 .build(), java.net.http.HttpResponse.BodyHandlers.ofString());
         assertEquals(200, login.statusCode(), login.body());
         String token = mapper.readTree(login.body()).get("token").asText();
+        var dashboardBefore = client.send(java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create(base + "/financial-dashboard"))
+                .header("Authorization", "Bearer " + token).GET().build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, dashboardBefore.statusCode(), dashboardBefore.body());
+        var dashboardBeforeBody = mapper.readTree(dashboardBefore.body());
+        var previousCashAdvances = new java.math.BigDecimal(dashboardBeforeBody.get("cashAdvances").asText());
+        var previousGoodsAdvances = new java.math.BigDecimal(dashboardBeforeBody.get("goodsAdvances").asText());
         var before = client.send(java.net.http.HttpRequest.newBuilder(
                 java.net.URI.create(base + "/worker-balances/" + workerId))
                 .header("Authorization", "Bearer " + token).GET().build(),
@@ -220,6 +255,41 @@ class PostgreSqlMigrationIntegrationTest {
         assertEquals(0, previousAdvances.add(new java.math.BigDecimal("200.00"))
                 .compareTo(new java.math.BigDecimal(
                         mapper.readTree(afterCreate.body()).get("totalAdvances").asText())));
+        var cashCreate = client.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/salary-advances"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + token)
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
+                        "{\"workerId\":" + workerId + ",\"advanceDate\":\"2026-10-27\","
+                                + "\"type\":\"CASH\",\"amount\":\"75.00\"}"))
+                .build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(201, cashCreate.statusCode(), cashCreate.body());
+        long cashAdvanceId = mapper.readTree(cashCreate.body()).get("id").asLong();
+
+        var dashboard = client.send(java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create(base + "/financial-dashboard"))
+                .header("Authorization", "Bearer " + token).GET().build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, dashboard.statusCode(), dashboard.body());
+        var dashboardBody = mapper.readTree(dashboard.body());
+        assertTrue(dashboardBody.get("workerCount").asLong() > 0);
+        assertEquals(0, previousGoodsAdvances.add(new java.math.BigDecimal("200.00")).compareTo(
+                new java.math.BigDecimal(dashboardBody.get("goodsAdvances").asText())));
+        assertEquals(0, previousCashAdvances.add(new java.math.BigDecimal("75.00")).compareTo(
+                new java.math.BigDecimal(dashboardBody.get("cashAdvances").asText())));
+        assertEquals(0, previousCashAdvances.add(previousGoodsAdvances)
+                .add(new java.math.BigDecimal("275.00")).compareTo(
+                new java.math.BigDecimal(dashboardBody.get("totalAdvances").asText())));
+
+        var invalidAdvance = client.send(java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create(base + "/salary-advances"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + token)
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
+                        "{\"workerId\":" + workerId + ",\"advanceDate\":\"2026-10-27\","
+                                + "\"type\":\"CASH\",\"amount\":\"0.00\"}"))
+                .build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(400, invalidAdvance.statusCode(), invalidAdvance.body());
+
         var cancel = client.send(java.net.http.HttpRequest.newBuilder(
                 java.net.URI.create(base + "/salary-advances/" + advanceId))
                 .header("Authorization", "Bearer " + token).DELETE().build(),
@@ -230,8 +300,20 @@ class PostgreSqlMigrationIntegrationTest {
                 .header("Authorization", "Bearer " + token).GET().build(),
                 java.net.http.HttpResponse.BodyHandlers.ofString());
         assertEquals(200, afterCancel.statusCode(), afterCancel.body());
+        assertEquals(0, previousAdvances.add(new java.math.BigDecimal("75.00")).compareTo(
+                new java.math.BigDecimal(mapper.readTree(afterCancel.body()).get("totalAdvances").asText())));
+        var cancelCash = client.send(java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create(base + "/salary-advances/" + cashAdvanceId))
+                .header("Authorization", "Bearer " + token).DELETE().build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, cancelCash.statusCode(), cancelCash.body());
+        var afterAllCancelled = client.send(java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create(base + "/worker-balances/" + workerId))
+                .header("Authorization", "Bearer " + token).GET().build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, afterAllCancelled.statusCode(), afterAllCancelled.body());
         assertEquals(0, previousAdvances.compareTo(new java.math.BigDecimal(
-                mapper.readTree(afterCancel.body()).get("totalAdvances").asText())));
+                mapper.readTree(afterAllCancelled.body()).get("totalAdvances").asText())));
 
         var workerLogin = client.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/auth/login"))
                 .header("Content-Type", "application/json")
@@ -251,6 +333,11 @@ class PostgreSqlMigrationIntegrationTest {
                 .header("Authorization", "Bearer " + workerToken).GET().build(),
                 java.net.http.HttpResponse.BodyHandlers.ofString());
         assertEquals(403, forbidden.statusCode(), forbidden.body());
+        var dashboardForbidden = client.send(java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create(base + "/financial-dashboard"))
+                .header("Authorization", "Bearer " + workerToken).GET().build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(403, dashboardForbidden.statusCode(), dashboardForbidden.body());
     }
 
     private void verifyAdminCannotAccessAnotherFarmsFinances(
@@ -274,6 +361,19 @@ class PostgreSqlMigrationIntegrationTest {
                 .build(), java.net.http.HttpResponse.BodyHandlers.ofString());
         assertEquals(200, login.statusCode(), login.body());
         String token = mapper.readTree(login.body()).get("token").asText();
+        var dashboard = client.send(java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create(base + "/financial-dashboard"))
+                .header("Authorization", "Bearer " + token).GET().build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, dashboard.statusCode(), dashboard.body());
+        long adminFarmId = jdbc.queryForObject("SELECT ap.farm_id FROM admin_profile ap "
+                + "JOIN users u ON u.id=ap.user_id WHERE u.username='admin1'", Long.class);
+        java.math.BigDecimal expectedOwnFarmAdvances = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(a.amount),0) FROM salary_advances a "
+                        + "JOIN worker w ON w.id=a.worker_id WHERE w.farm_id=? AND a.cancelled_at IS NULL",
+                java.math.BigDecimal.class, adminFarmId);
+        assertEquals(0, expectedOwnFarmAdvances.compareTo(new java.math.BigDecimal(
+                mapper.readTree(dashboard.body()).get("totalAdvances").asText())));
         var ownList = client.send(java.net.http.HttpRequest.newBuilder(
                 java.net.URI.create(base + "/salary-advances?page=0&size=10"))
                 .header("Authorization", "Bearer " + token).GET().build(),
@@ -361,7 +461,7 @@ class PostgreSqlMigrationIntegrationTest {
         assertEquals(0, runs.cleanup(run.get("id"), key).get("remaining"));
         assertEquals(0, runs.cleanup(run.get("id"), key).get("remaining")); // retry is harmless
         assertEquals("4", scalar("SELECT count(*) FROM work_logs")); // original rows untouched
-        assertEquals("2", scalar("SELECT count(*) FROM salary_advances")); // real records remain as history
+        assertEquals("3", scalar("SELECT count(*) FROM salary_advances")); // baseline plus cancelled API history
         assertEquals("0", scalar("SELECT count(*) FROM salary_advances WHERE e2e_run_id IS NOT NULL"));
         assertEquals(1L, jdbc.queryForObject("SELECT count(*) FROM e2e_runs WHERE id=?", Long.class, other.get("id")));
         jdbc.update("UPDATE e2e_runs SET expires_at=now()-interval '1 minute' WHERE id=?", other.get("id"));
@@ -403,6 +503,31 @@ class PostgreSqlMigrationIntegrationTest {
         try (var statement = connection.createStatement(); var result = statement.executeQuery(sql)) {
             assertTrue(result.next());
             return result.getString(1);
+        }
+    }
+
+    private long scalarLong(String sql) throws SQLException {
+        try (var statement = connection.createStatement(); var result = statement.executeQuery(sql)) {
+            assertTrue(result.next());
+            return result.getLong(1);
+        }
+    }
+
+    private void assertSqlFailureAndRecover(String sql) throws SQLException {
+        boolean wasAutoCommit = connection.getAutoCommit();
+        if (wasAutoCommit) {
+            connection.setAutoCommit(false);
+        }
+        var savepoint = connection.setSavepoint();
+        try {
+            assertThrows(SQLException.class, () -> execute(sql));
+        } finally {
+            connection.rollback(savepoint);
+            connection.releaseSavepoint(savepoint);
+            if (wasAutoCommit) {
+                connection.commit();
+                connection.setAutoCommit(true);
+            }
         }
     }
 }

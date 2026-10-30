@@ -2,6 +2,7 @@ package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.dto.ChangePasswordRequest;
 import com.aomaoi.backend.dto.LoginRequest;
+import com.aomaoi.backend.dto.AuthResponseDTO;
 import com.aomaoi.backend.service.AuthService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,8 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -40,30 +39,28 @@ class AuthControllerTest {
 
     @Test
     void login_Success() {
-        Map<String, Object> serviceResponse = new HashMap<>();
-        serviceResponse.put("success", true);
-        serviceResponse.put("token", "dummy_token");
+        AuthResponseDTO serviceResponse = new AuthResponseDTO(true, "dummy_token", null, null);
 
         when(authService.login(loginRequest)).thenReturn(serviceResponse);
 
-        ResponseEntity<Map<String, Object>> response = authController.login(loginRequest);
+        ResponseEntity<AuthResponseDTO> response = authController.login(loginRequest);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals(true, response.getBody().get("success"));
-        assertEquals("dummy_token", response.getBody().get("token"));
+        assertEquals(true, response.getBody().success());
+        assertEquals("dummy_token", response.getBody().token());
     }
 
     @Test
     void login_Failure_Returns401() {
         when(authService.login(loginRequest)).thenThrow(new org.springframework.security.authentication.BadCredentialsException("Bad credentials"));
 
-        ResponseEntity<Map<String, Object>> response = authController.login(loginRequest);
+        ResponseEntity<AuthResponseDTO> response = authController.login(loginRequest);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals(false, response.getBody().get("success"));
-        assertEquals("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", response.getBody().get("message"));
+        assertEquals(false, response.getBody().success());
+        assertEquals("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", response.getBody().message());
     }
 
     @Test
@@ -77,13 +74,13 @@ class AuthControllerTest {
         doNothing().when(authService).changePassword("testuser", "oldpassword", "newpassword");
         when(authService.refreshToken("testuser")).thenReturn("fresh_token");
 
-        ResponseEntity<Map<String, Object>> response = authController.changePassword(request, auth);
+        ResponseEntity<AuthResponseDTO> response = authController.changePassword(request, auth);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals(true, response.getBody().get("success"));
-        assertEquals("Password changed successfully", response.getBody().get("message"));
-        assertEquals("fresh_token", response.getBody().get("token"));
+        assertEquals(true, response.getBody().success());
+        assertEquals("Password changed successfully", response.getBody().message());
+        assertEquals("fresh_token", response.getBody().token());
         verify(authService).changePassword("testuser", "oldpassword", "newpassword");
     }
 }

@@ -123,26 +123,6 @@ class AdminProfileServiceTest {
     }
 
     @Test
-    void addAdmin_ShortPassword_ThrowsIllegalArgumentException() {
-        AdminRequestDTO dto = new AdminRequestDTO();
-        dto.setUsername("admin2");
-        dto.setFullName("Admin Two");
-        dto.setTempPassword("123");
-
-        assertThrows(IllegalArgumentException.class, () -> adminProfileService.addAdmin(dto));
-    }
-
-    @Test
-    void addAdmin_BlankFullName_ThrowsIllegalArgumentException() {
-        AdminRequestDTO dto = new AdminRequestDTO();
-        dto.setUsername("admin2");
-        dto.setFullName("   ");
-        dto.setTempPassword("123456");
-
-        assertThrows(IllegalArgumentException.class, () -> adminProfileService.addAdmin(dto));
-    }
-
-    @Test
     void addAdmin_UsernameExists_ThrowsException() {
         AdminRequestDTO dto = new AdminRequestDTO();
         dto.setUsername("existingadmin");
@@ -229,6 +209,8 @@ class AdminProfileServiceTest {
     void addAdmin_MissingFarm_RejectsBeforeSavingUser() {
         AdminRequestDTO dto = new AdminRequestDTO();
         dto.setUsername("admin2");
+        dto.setFullName("Admin Two");
+        dto.setTempPassword("temp123");
 
         assertThrows(IllegalArgumentException.class, () -> adminProfileService.addAdmin(dto));
         verify(userRepository, never()).save(any());

@@ -1,6 +1,7 @@
 package com.aomaoi.backend.service;
 
 import com.aomaoi.backend.dto.FarmRequestDTO;
+import com.aomaoi.backend.dto.FarmResponseDTO;
 import com.aomaoi.backend.entity.Farm;
 import com.aomaoi.backend.repository.FarmRepository;
 import com.aomaoi.backend.repository.WorkerRepository;
@@ -56,20 +57,20 @@ class FarmServiceTest {
     void getAllFarms() {
         when(farmRepository.findAll()).thenReturn(List.of(farm));
 
-        List<Farm> result = farmService.getAllFarms();
+        List<FarmResponseDTO> result = farmService.getAllFarms();
 
         assertEquals(1, result.size());
-        assertEquals("Green Farm", result.get(0).getName());
+        assertEquals("Green Farm", result.get(0).name());
     }
 
     @Test
     void getFarmById_Success() {
         when(farmRepository.findById(1L)).thenReturn(Optional.of(farm));
 
-        Farm result = farmService.getFarmById(1L);
+        FarmResponseDTO result = farmService.getFarmById(1L);
 
         assertNotNull(result);
-        assertEquals("Green Farm", result.getName());
+        assertEquals("Green Farm", result.name());
     }
 
     @Test
@@ -81,12 +82,12 @@ class FarmServiceTest {
         when(workLogRepository.sumTotalByFarmIdAndWorkDateBetween(eq(1L), any(), any()))
                 .thenReturn(new BigDecimal("300.00"));
 
-        Farm result = farmService.getFarmById(1L);
+        FarmResponseDTO result = farmService.getFarmById(1L);
 
-        assertEquals(4, result.getWorkerCount());
-        assertEquals(1, result.getAdminCount());
-        assertEquals(1250.0, result.getTotalWages());
-        assertEquals(300.0, result.getMonthlyWages());
+        assertEquals(4, result.workerCount());
+        assertEquals(1, result.adminCount());
+        assertEquals(new BigDecimal("1250.00"), result.totalWages());
+        assertEquals(new BigDecimal("300.00"), result.monthlyWages());
     }
 
     @Test
@@ -97,10 +98,10 @@ class FarmServiceTest {
         when(workLogRepository.sumTotalByFarmId(1L)).thenReturn(null);
         when(workLogRepository.sumTotalByFarmIdAndWorkDateBetween(eq(1L), any(), any())).thenReturn(null);
 
-        Farm result = farmService.getFarmById(1L);
+        FarmResponseDTO result = farmService.getFarmById(1L);
 
-        assertEquals(0.0, result.getTotalWages());
-        assertEquals(0.0, result.getMonthlyWages());
+        assertEquals(BigDecimal.ZERO, result.totalWages());
+        assertEquals(BigDecimal.ZERO, result.monthlyWages());
     }
 
     @Test
@@ -119,34 +120,16 @@ class FarmServiceTest {
 
         when(farmRepository.save(any(Farm.class))).thenAnswer(i -> i.getArgument(0));
 
-        Farm created = farmService.addFarm(dto);
+        FarmResponseDTO created = farmService.addFarm(dto);
 
         assertNotNull(created);
-        assertEquals("New Farm", created.getName());
-        assertEquals("Bangkok", created.getLocation());
+        assertEquals("New Farm", created.name());
+        assertEquals("Bangkok", created.location());
     }
 
     @Test
     void addFarm_NullDto_ThrowsIllegalArgumentException() {
         assertThrows(IllegalArgumentException.class, () -> farmService.addFarm(null));
-    }
-
-    @Test
-    void addFarm_BlankName_ThrowsIllegalArgumentException() {
-        FarmRequestDTO dto = new FarmRequestDTO();
-        dto.setName("   ");
-        dto.setLocation("Bangkok");
-
-        assertThrows(IllegalArgumentException.class, () -> farmService.addFarm(dto));
-    }
-
-    @Test
-    void addFarm_BlankLocation_ThrowsIllegalArgumentException() {
-        FarmRequestDTO dto = new FarmRequestDTO();
-        dto.setName("New Farm");
-        dto.setLocation("");
-
-        assertThrows(IllegalArgumentException.class, () -> farmService.addFarm(dto));
     }
 
     @Test
@@ -159,20 +142,11 @@ class FarmServiceTest {
         when(farmRepository.findById(1L)).thenReturn(Optional.of(farm));
         when(farmRepository.save(any(Farm.class))).thenAnswer(i -> i.getArgument(0));
 
-        Farm updated = farmService.updateFarm(1L, dto);
+        FarmResponseDTO updated = farmService.updateFarm(1L, dto);
 
-        assertEquals("Updated Farm", updated.getName());
-        assertEquals("Phuket", updated.getLocation());
-        assertEquals("updated.jpg", updated.getImage());
-    }
-
-    @Test
-    void updateFarm_BlankName_ThrowsIllegalArgumentException() {
-        FarmRequestDTO dto = new FarmRequestDTO();
-        dto.setName("");
-        dto.setLocation("Phuket");
-
-        assertThrows(IllegalArgumentException.class, () -> farmService.updateFarm(1L, dto));
+        assertEquals("Updated Farm", updated.name());
+        assertEquals("Phuket", updated.location());
+        assertEquals("updated.jpg", updated.image());
     }
 
     @Test
@@ -196,10 +170,10 @@ class FarmServiceTest {
         when(farmRepository.findById(1L)).thenReturn(Optional.of(farm));
         when(farmRepository.save(any(Farm.class))).thenAnswer(i -> i.getArgument(0));
 
-        Farm updated = farmService.updateFarm(1L, dto);
+        FarmResponseDTO updated = farmService.updateFarm(1L, dto);
 
-        assertEquals("Updated Farm", updated.getName());
-        assertEquals("farm.png", updated.getImage()); // Kept original image
+        assertEquals("Updated Farm", updated.name());
+        assertEquals("farm.png", updated.image()); // Kept original image
     }
 
     @Test

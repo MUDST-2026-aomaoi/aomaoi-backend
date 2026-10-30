@@ -1,6 +1,7 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.dto.LoginRequest;
+import com.aomaoi.backend.dto.AuthResponseDTO;
 import com.aomaoi.backend.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -8,8 +9,6 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import org.springframework.security.core.AuthenticationException;
 
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * AuthController - จัดการ API เกี่ยวกับการยืนยันตัวตน (Authentication)
@@ -35,14 +34,12 @@ public class AuthController {
      * Response 401: { "success": false, "message": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" }
      */
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest credentials) {
+    public ResponseEntity<AuthResponseDTO> login(@Valid @RequestBody LoginRequest credentials) {
         try {
-            Map<String, Object> response = authService.login(credentials);
+            AuthResponseDTO response = authService.login(credentials);
             return ResponseEntity.ok(response);
         } catch (AuthenticationException e) {
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+            AuthResponseDTO errorResponse = new AuthResponseDTO(false, null, null, "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
             return ResponseEntity.status(401).body(errorResponse);
         }
     }
@@ -58,17 +55,15 @@ public class AuthController {
      * Response 500: RuntimeException ถ้ารหัสผ่านเก่าไม่ถูกต้อง
      */
     @PostMapping("/change-password")
-    public ResponseEntity<Map<String, Object>> changePassword(
+    public ResponseEntity<AuthResponseDTO> changePassword(
             @Valid @RequestBody com.aomaoi.backend.dto.ChangePasswordRequest request,
             org.springframework.security.core.Authentication authentication) {
         
         String username = authentication.getName();
         authService.changePassword(username, request.getOldPassword(), request.getNewPassword());
         
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "Password changed successfully");
-        response.put("token", authService.refreshToken(username));
+        AuthResponseDTO response = new AuthResponseDTO(true, authService.refreshToken(username), null,
+                "Password changed successfully");
         return ResponseEntity.ok(response);
     }
 }

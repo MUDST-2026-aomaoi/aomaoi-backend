@@ -2,6 +2,8 @@ package com.aomaoi.backend.service;
 
 import com.aomaoi.backend.config.JwtUtil;
 import com.aomaoi.backend.dto.LoginRequest;
+import com.aomaoi.backend.dto.AuthResponseDTO;
+import com.aomaoi.backend.dto.AuthUserResponseDTO;
 import com.aomaoi.backend.entity.User;
 import com.aomaoi.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,8 +14,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -29,7 +29,7 @@ public class AuthService {
     private final com.aomaoi.backend.repository.WorkerRepository workerRepository;
     private final AuditLogService auditLogService;
 
-    public Map<String, Object> login(LoginRequest request) {
+    public AuthResponseDTO login(LoginRequest request) {
         // 1. Let Spring Security verify the username and password securely against the database
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
@@ -37,16 +37,10 @@ public class AuthService {
 
         // 2. If we reach this line, the password was CORRECT! Load the user's data from the DB.
         UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
-        User user = userRepository.findByUsername(request.getUsername()).get();
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
         // 4. Format the JSON response exactly how the React frontend expects it!
-        Map<String, Object> response = new HashMap<>();
-        Map<String, Object> userData = new HashMap<>();
-        
-        userData.put("username", user.getUsername());
-        userData.put("role", user.getRole());
-        userData.put("isFirstLogin", user.getIsFirstLogin());
-        
         String fullName = user.getUsername();
         Long actualId = user.getId();
         String avatar = null;
@@ -75,17 +69,9 @@ public class AuthService {
             }
         }
         
-        userData.put("id", actualId);
-        userData.put("fullName", fullName);
-        if (avatar != null) {
-            userData.put("avatar", avatar);
-        }
-        
-        response.put("success", true);
-        response.put("token", jwtUtil.generateToken(userDetails, user.getRole()));
-        response.put("user", userData);
-
-        return response;
+        AuthUserResponseDTO userData = new AuthUserResponseDTO(actualId, user.getUsername(), user.getRole(),
+                user.getIsFirstLogin(), fullName, avatar);
+        return new AuthResponseDTO(true, jwtUtil.generateToken(userDetails, user.getRole()), userData, null);
     }
 
     @Transactional

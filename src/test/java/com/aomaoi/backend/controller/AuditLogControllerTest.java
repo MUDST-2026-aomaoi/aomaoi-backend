@@ -1,6 +1,7 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.entity.AuditLog;
+import com.aomaoi.backend.dto.AuditLogResponseDTO;
 import com.aomaoi.backend.service.AuditLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,12 +44,12 @@ class AuditLogControllerTest {
     void getAuditLogs_ReturnsListOfLogs() {
         when(auditLogService.getAllLogs()).thenReturn(List.of(auditLog));
 
-        ResponseEntity<List<AuditLog>> response = auditLogController.getAuditLogs();
+        ResponseEntity<List<AuditLogResponseDTO>> response = auditLogController.getAuditLogs();
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(1, response.getBody().size());
-        assertEquals("CREATE_WORKER", response.getBody().get(0).getAction());
+        assertEquals("CREATE_WORKER", response.getBody().get(0).action());
         verify(auditLogService).getAllLogs();
     }
 }

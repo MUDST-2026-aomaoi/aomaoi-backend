@@ -222,33 +222,6 @@ class WorkerServiceTest {
     }
 
     @Test
-    void addWorker_PasswordTooShort_ThrowsIllegalArgumentException() {
-        WorkerRequestDTO dto = new WorkerRequestDTO();
-        dto.setTempPassword("123");
-
-        assertThrows(IllegalArgumentException.class, () -> workerService.addWorker(dto));
-    }
-
-    @Test
-    void addWorker_MissingFullName_ThrowsIllegalArgumentException() {
-        WorkerRequestDTO dto = new WorkerRequestDTO();
-        dto.setTempPassword("pass123");
-        dto.setFullName("");
-
-        assertThrows(IllegalArgumentException.class, () -> workerService.addWorker(dto));
-    }
-
-    @Test
-    void addWorker_InvalidUsernameWithSpace_ThrowsException() {
-        WorkerRequestDTO dto = new WorkerRequestDTO();
-        dto.setUsername("invalid user");
-        dto.setTempPassword("pass123");
-        dto.setFullName("Worker Name");
-
-        assertThrows(RuntimeException.class, () -> workerService.addWorker(dto));
-    }
-
-    @Test
     void addWorker_DuplicateUsername_ThrowsException() {
         WorkerRequestDTO dto = new WorkerRequestDTO();
         dto.setUsername("duplicate");
@@ -302,16 +275,6 @@ class WorkerServiceTest {
     }
 
     @Test
-    void updateWorker_InvalidUsernameWithSpace_ThrowsException() {
-        WorkerRequestDTO dto = new WorkerRequestDTO();
-        dto.setUsername("invalid user");
-
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
-
-        assertThrows(RuntimeException.class, () -> workerService.updateWorker(1L, dto));
-    }
-
-    @Test
     void updateWorker_DuplicateUsername_ThrowsException() {
         WorkerRequestDTO dto = new WorkerRequestDTO();
         dto.setUsername("existinguser");
@@ -334,6 +297,19 @@ class WorkerServiceTest {
         assertThrows(AccessDeniedException.class,
                 () -> workerService.updateWorker(1L, new WorkerRequestDTO()));
         verify(workerRepository, never()).save(any());
+    }
+
+    @Test
+    void getAllWorkers_InactiveAdminIsDenied() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        AdminProfile profile = new AdminProfile();
+        profile.setFarmId(10L);
+        profile.setStatus("inactive");
+        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(profile));
+
+        assertThrows(AccessDeniedException.class, () -> workerService.getAllWorkers());
+        verify(workerRepository, never()).findByFarmId(anyLong());
     }
 
     @Test

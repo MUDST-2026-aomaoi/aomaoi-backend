@@ -1,13 +1,15 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.dto.AdminRequestDTO;
-import com.aomaoi.backend.entity.AdminProfile;
+import com.aomaoi.backend.dto.AdminProfileResponseDTO;
 import com.aomaoi.backend.service.AdminProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
+import jakarta.validation.Valid;
 
 /**
  * AdminProfileController - จัดการ API เกี่ยวกับโปรไฟล์ Admin (ผู้ดูแลฟาร์ม)
@@ -25,22 +27,22 @@ public class AdminProfileController {
     /**
      * GET /api/admins - ดึงรายการ Admin ทั้งหมด
      *
-     * Response 200: [ { "id", "fullName", "phone", "farmId", "status", "user": {...} } ]
+     * Response 200: [ { "id", "fullName", "phone", "farmId", "status", "username" } ]
      */
     @GetMapping
-    public ResponseEntity<List<AdminProfile>> getAllAdmins() {
-        return ResponseEntity.ok(adminService.getAllAdmins());
+    public ResponseEntity<List<AdminProfileResponseDTO>> getAllAdmins() {
+        return ResponseEntity.ok(adminService.getAllAdmins().stream().map(AdminProfileResponseDTO::from).toList());
     }
 
     /**
      * GET /api/admins/{id} - ดึงข้อมูล Admin ตาม ID
      *
-     * Response 200: { "id", "fullName", "phone", "farmId", "status", "user": {...} }
+     * Response 200: { "id", "fullName", "phone", "farmId", "status", "username" }
      * Response 500: RuntimeException ถ้าไม่พบ Admin
      */
     @GetMapping("/{id}")
-    public ResponseEntity<AdminProfile> getAdminById(@PathVariable Long id) {
-        return ResponseEntity.ok(adminService.getAdminById(id));
+    public ResponseEntity<AdminProfileResponseDTO> getAdminById(@PathVariable Long id) {
+        return ResponseEntity.ok(AdminProfileResponseDTO.from(adminService.getAdminById(id)));
     }
 
     /**
@@ -51,8 +53,8 @@ public class AdminProfileController {
      * Response 500: RuntimeException ถ้า username ซ้ำ
      */
     @PostMapping
-    public ResponseEntity<AdminProfile> addAdmin(@RequestBody AdminRequestDTO dto) {
-        return ResponseEntity.ok(adminService.addAdmin(dto));
+    public ResponseEntity<AdminProfileResponseDTO> addAdmin(@Validated(AdminRequestDTO.Create.class) @RequestBody AdminRequestDTO dto) {
+        return ResponseEntity.ok(AdminProfileResponseDTO.from(adminService.addAdmin(dto)));
     }
 
     /**
@@ -62,8 +64,8 @@ public class AdminProfileController {
      * Response 200: AdminProfile object ที่อัปเดตแล้ว
      */
     @PutMapping("/{id}")
-    public ResponseEntity<AdminProfile> updateAdmin(@PathVariable Long id, @RequestBody AdminRequestDTO dto) {
-        return ResponseEntity.ok(adminService.updateAdmin(id, dto));
+    public ResponseEntity<AdminProfileResponseDTO> updateAdmin(@PathVariable Long id, @Valid @RequestBody AdminRequestDTO dto) {
+        return ResponseEntity.ok(AdminProfileResponseDTO.from(adminService.updateAdmin(id, dto)));
     }
 
     /**

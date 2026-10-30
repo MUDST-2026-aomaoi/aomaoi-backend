@@ -32,10 +32,7 @@ public class AdminProfileService {
 
     @Transactional
     public AdminProfile addAdmin(AdminRequestDTO dto) {
-        if (dto == null || dto.getUsername() == null || dto.getUsername().isBlank()
-                || dto.getFullName() == null || dto.getFullName().isBlank()
-                || dto.getTempPassword() == null || dto.getTempPassword().length() < 6)
-            throw new IllegalArgumentException("Username, full name and a 6-character password are required");
+        if (dto == null) throw new IllegalArgumentException("Admin request is required");
         if (userRepository.existsByUsername(dto.getUsername())) {
             throw new IllegalArgumentException("Username already exists");
         }

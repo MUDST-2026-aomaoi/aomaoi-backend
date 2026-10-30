@@ -1,5 +1,7 @@
 package com.aomaoi.backend.dto;
 
+import com.aomaoi.backend.dto.SalaryAdvanceRequestDTO;
+import com.aomaoi.backend.entity.AdvanceType;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -7,6 +9,8 @@ import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -80,5 +84,51 @@ class DtoValidationTest {
 
         Set<ConstraintViolation<WorkLogRequestDTO>> violations = validator.validate(dto);
         assertEquals(2, violations.size());
+    }
+
+    @Test
+    void salaryAdvanceRequestDTO_ValidCashAndGoods_HaveNoViolations() {
+        var cash = new SalaryAdvanceRequestDTO(1L, LocalDate.of(2026, 10, 27), AdvanceType.CASH,
+                new BigDecimal("100.00"), null);
+        var goods = new SalaryAdvanceRequestDTO(1L, LocalDate.of(2026, 10, 27), AdvanceType.GOODS,
+                new BigDecimal("100.00"), "ปุ๋ย");
+
+        assertTrue(validator.validate(cash).isEmpty());
+        assertTrue(validator.validate(goods).isEmpty());
+    }
+
+    @Test
+    void salaryAdvanceRequestDTO_RequiredFieldsMissing_HaveViolations() {
+        var request = new SalaryAdvanceRequestDTO(null, null, null, null, null);
+
+        Set<ConstraintViolation<SalaryAdvanceRequestDTO>> violations = validator.validate(request);
+
+        Set<String> properties = violations.stream()
+                .map(v -> v.getPropertyPath().toString())
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(Set.of("workerId", "advanceDate", "type", "amount"), properties);
+    }
+
+    @Test
+    void salaryAdvanceRequestDTO_AmountOutsideNumericPrecision_HasViolation() {
+        var request = new SalaryAdvanceRequestDTO(1L, LocalDate.of(2026, 10, 27), AdvanceType.CASH,
+                new BigDecimal("100000000000000000.00"), null);
+
+        Set<ConstraintViolation<SalaryAdvanceRequestDTO>> violations = validator.validate(request);
+
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("amount")));
+    }
+
+    @Test
+    void salaryAdvanceRequestDTO_AmountBelowMinimumOrTooPrecise_HasViolation() {
+        var zero = new SalaryAdvanceRequestDTO(1L, LocalDate.of(2026, 10, 27), AdvanceType.CASH,
+                BigDecimal.ZERO, null);
+        var overScale = new SalaryAdvanceRequestDTO(1L, LocalDate.of(2026, 10, 27), AdvanceType.CASH,
+                new BigDecimal("10.001"), null);
+
+        assertTrue(validator.validate(zero).stream()
+                .anyMatch(v -> v.getPropertyPath().toString().equals("amount")));
+        assertTrue(validator.validate(overScale).stream()
+                .anyMatch(v -> v.getPropertyPath().toString().equals("amount")));
     }
 }

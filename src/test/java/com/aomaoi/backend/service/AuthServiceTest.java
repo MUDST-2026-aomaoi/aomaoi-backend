@@ -20,6 +20,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -163,6 +164,18 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_UserNotFound_ThrowsException() {
+        LoginRequest request = new LoginRequest();
+        request.setUsername("unknown");
+        request.setPassword("pass");
+
+        when(userDetailsService.loadUserByUsername("unknown")).thenReturn(userDetails);
+        when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementException.class, () -> authService.login(request));
+    }
+
+    @Test
     void changePassword_Worker_Success() {
         when(userRepository.findByUsername("worker1")).thenReturn(Optional.of(workerUser));
         when(passwordEncoder.matches("oldpass", workerUser.getPassword())).thenReturn(true);
@@ -271,5 +284,27 @@ class AuthServiceTest {
         RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.login(request));
         assertEquals("Worker is inactive", ex.getMessage());
     }
-}
 
+    @Test
+    void refreshToken_Success() {
+        when(userRepository.findByUsername("admin1")).thenReturn(Optional.of(adminUser));
+        when(userDetailsService.loadUserByUsername("admin1")).thenReturn(userDetails);
+        when(jwtUtil.generateToken(userDetails, "admin")).thenReturn("refreshed_jwt_token");
+
+        String token = authService.refreshToken("admin1");
+
+        assertNotNull(token);
+        assertEquals("refreshed_jwt_token", token);
+        verify(jwtUtil).generateToken(userDetails, "admin");
+    }
+
+    @Test
+    void refreshToken_UserNotFound_ThrowsException() {
+        when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> authService.refreshToken("unknown"));
+        assertEquals("User not found", ex.getMessage());
+        verify(userDetailsService, never()).loadUserByUsername(any());
+    }
+}

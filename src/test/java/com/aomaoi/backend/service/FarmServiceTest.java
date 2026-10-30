@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.math.BigDecimal;
 
@@ -89,6 +90,20 @@ class FarmServiceTest {
     }
 
     @Test
+    void getFarmById_NullTotals_DefaultsToZero() {
+        when(farmRepository.findById(1L)).thenReturn(Optional.of(farm));
+        when(workerRepository.countByFarmIdAndStatusNot(1L, "inactive")).thenReturn(0L);
+        when(adminProfileRepository.countByFarmIdAndStatusNot(1L, "inactive")).thenReturn(0L);
+        when(workLogRepository.sumTotalByFarmId(1L)).thenReturn(null);
+        when(workLogRepository.sumTotalByFarmIdAndWorkDateBetween(eq(1L), any(), any())).thenReturn(null);
+
+        Farm result = farmService.getFarmById(1L);
+
+        assertEquals(0.0, result.getTotalWages());
+        assertEquals(0.0, result.getMonthlyWages());
+    }
+
+    @Test
     void getFarmById_NotFound_ThrowsException() {
         when(farmRepository.findById(99L)).thenReturn(Optional.empty());
 
@@ -112,6 +127,29 @@ class FarmServiceTest {
     }
 
     @Test
+    void addFarm_NullDto_ThrowsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> farmService.addFarm(null));
+    }
+
+    @Test
+    void addFarm_BlankName_ThrowsIllegalArgumentException() {
+        FarmRequestDTO dto = new FarmRequestDTO();
+        dto.setName("   ");
+        dto.setLocation("Bangkok");
+
+        assertThrows(IllegalArgumentException.class, () -> farmService.addFarm(dto));
+    }
+
+    @Test
+    void addFarm_BlankLocation_ThrowsIllegalArgumentException() {
+        FarmRequestDTO dto = new FarmRequestDTO();
+        dto.setName("New Farm");
+        dto.setLocation("");
+
+        assertThrows(IllegalArgumentException.class, () -> farmService.addFarm(dto));
+    }
+
+    @Test
     void updateFarm_Success() {
         FarmRequestDTO dto = new FarmRequestDTO();
         dto.setName("Updated Farm");
@@ -126,6 +164,26 @@ class FarmServiceTest {
         assertEquals("Updated Farm", updated.getName());
         assertEquals("Phuket", updated.getLocation());
         assertEquals("updated.jpg", updated.getImage());
+    }
+
+    @Test
+    void updateFarm_BlankName_ThrowsIllegalArgumentException() {
+        FarmRequestDTO dto = new FarmRequestDTO();
+        dto.setName("");
+        dto.setLocation("Phuket");
+
+        assertThrows(IllegalArgumentException.class, () -> farmService.updateFarm(1L, dto));
+    }
+
+    @Test
+    void updateFarm_NotFound_ThrowsNoSuchElementException() {
+        FarmRequestDTO dto = new FarmRequestDTO();
+        dto.setName("Updated Farm");
+        dto.setLocation("Phuket");
+
+        when(farmRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementException.class, () -> farmService.updateFarm(99L, dto));
     }
 
     @Test
@@ -153,5 +211,12 @@ class FarmServiceTest {
 
         assertEquals("inactive", farm.getStatus());
         verify(farmRepository).save(farm);
+    }
+
+    @Test
+    void deleteFarm_NotFound_ThrowsNoSuchElementException() {
+        when(farmRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementException.class, () -> farmService.deleteFarm(99L));
     }
 }

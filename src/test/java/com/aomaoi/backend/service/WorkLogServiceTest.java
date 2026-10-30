@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -104,6 +105,47 @@ class WorkLogServiceTest {
     }
 
     @Test
+    void getAllLogs_WorkerRole_ReturnsOwnLogs() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("workeruser", "pass", List.of(new SimpleGrantedAuthority("ROLE_WORKER")))
+        );
+        when(workerRepository.findByUserUsername("workeruser")).thenReturn(Optional.of(worker));
+        when(workLogRepository.findByWorkerIdOrderByWorkDateDescIdDesc(1L)).thenReturn(List.of(workLog));
+
+        List<Map<String, Object>> result = workLogService.getAllLogs();
+
+        assertEquals(1, result.size());
+        assertEquals("100", result.get(0).get("id"));
+        verify(workLogRepository).findByWorkerIdOrderByWorkDateDescIdDesc(1L);
+    }
+
+    @Test
+    void getAllLogs_WorkerProfileMissing_ThrowsAccessDeniedException() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("workeruser", "pass", List.of(new SimpleGrantedAuthority("ROLE_WORKER")))
+        );
+        when(workerRepository.findByUserUsername("workeruser")).thenReturn(Optional.empty());
+
+        assertThrows(AccessDeniedException.class, () -> workLogService.getAllLogs());
+    }
+
+    @Test
+    void getAllLogs_UnknownRole_ThrowsAccessDeniedException() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("guest", "pass", List.of(new SimpleGrantedAuthority("ROLE_GUEST")))
+        );
+
+        assertThrows(AccessDeniedException.class, () -> workLogService.getAllLogs());
+    }
+
+    @Test
+    void getAllLogs_Unauthenticated_ThrowsAccessDeniedException() {
+        SecurityContextHolder.clearContext();
+
+        assertThrows(AccessDeniedException.class, () -> workLogService.getAllLogs());
+    }
+
+    @Test
     void addLog_AdminCannotWriteAnotherFarm() {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 "adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
@@ -117,9 +159,69 @@ class WorkLogServiceTest {
         when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
         when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(profile));
 
-        assertThrows(org.springframework.security.access.AccessDeniedException.class,
-                () -> workLogService.addLog(dto));
+        assertThrows(AccessDeniedException.class, () -> workLogService.addLog(dto));
         verify(workLogRepository, never()).save(any());
+    }
+
+    @Test
+    void addLog_WorkerRole_ThrowsAccessDeniedException() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("workeruser", "pass", List.of(new SimpleGrantedAuthority("ROLE_WORKER")))
+        );
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setType("cutting");
+
+        assertThrows(AccessDeniedException.class, () -> workLogService.addLog(dto));
+        verify(workLogRepository, never()).save(any());
+    }
+
+    @Test
+    void addLog_InvalidDateFormat_ThrowsIllegalArgumentException() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("cutting");
+        dto.setDate("invalid-date-format");
+        dto.setRows(5);
+        dto.setWaPerRow(10);
+
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
+
+        assertThrows(IllegalArgumentException.class, () -> workLogService.addLog(dto));
+    }
+
+    @Test
+    void addLog_InvalidWorkerId_ThrowsIllegalArgumentException() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("not_a_number");
+        dto.setType("cutting");
+        dto.setDate("2026-10-12");
+
+        assertThrows(IllegalArgumentException.class, () -> workLogService.addLog(dto));
+    }
+
+    @Test
+    void addLog_NullWorkType_ThrowsIllegalArgumentException() {
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType(null);
+
+        assertThrows(IllegalArgumentException.class, () -> workLogService.addLog(dto));
+    }
+
+    @Test
+    void addLog_AdminNoFarm_ThrowsAccessDeniedException() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")))
+        );
+        WorkLogRequestDTO dto = new WorkLogRequestDTO();
+        dto.setWorkerId("1");
+        dto.setType("cutting");
+        dto.setDate("2026-10-12");
+
+        when(workerRepository.findLockedById(1L)).thenReturn(Optional.of(worker));
+        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.empty());
+
+        assertThrows(AccessDeniedException.class, () -> workLogService.addLog(dto));
     }
 
     @Test
@@ -476,4 +578,3 @@ class WorkLogServiceTest {
         verify(auditLogService).logAction(eq("CREATE_WORKLOG"), anyString(), anyString(), anyString());
     }
 }
-

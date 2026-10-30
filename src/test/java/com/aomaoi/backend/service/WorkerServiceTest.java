@@ -16,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -108,6 +109,35 @@ class WorkerServiceTest {
     }
 
     @Test
+    void getAllWorkers_WorkerRole_ReturnsOwnProfile() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("workeruser", "pass", List.of(new SimpleGrantedAuthority("ROLE_WORKER")))
+        );
+        when(workerRepository.findByUserUsername("workeruser")).thenReturn(Optional.of(worker));
+
+        List<Worker> result = workerService.getAllWorkers();
+
+        assertEquals(1, result.size());
+        assertEquals("Somchai Jaidee", result.get(0).getFullName());
+    }
+
+    @Test
+    void getAllWorkers_UnknownRole_ThrowsAccessDeniedException() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("guest", "pass", List.of(new SimpleGrantedAuthority("ROLE_GUEST")))
+        );
+
+        assertThrows(AccessDeniedException.class, () -> workerService.getAllWorkers());
+    }
+
+    @Test
+    void getAllWorkers_Unauthenticated_ThrowsAccessDeniedException() {
+        SecurityContextHolder.clearContext();
+
+        assertThrows(AccessDeniedException.class, () -> workerService.getAllWorkers());
+    }
+
+    @Test
     void getWorkerById_Success() {
         when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
 
@@ -115,6 +145,43 @@ class WorkerServiceTest {
 
         assertNotNull(result);
         assertEquals("Somchai Jaidee", result.getFullName());
+    }
+
+    @Test
+    void getWorkerById_WorkerOwnProfile_Success() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("workeruser", "pass", List.of(new SimpleGrantedAuthority("ROLE_WORKER")))
+        );
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+
+        Worker result = workerService.getWorkerById(1L);
+
+        assertNotNull(result);
+        assertEquals("Somchai Jaidee", result.getFullName());
+    }
+
+    @Test
+    void getWorkerById_WorkerOtherProfile_ThrowsAccessDeniedException() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("otherworker", "pass", List.of(new SimpleGrantedAuthority("ROLE_WORKER")))
+        );
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+
+        assertThrows(AccessDeniedException.class, () -> workerService.getWorkerById(1L));
+    }
+
+    @Test
+    void getWorkerById_AdminOtherFarm_ThrowsAccessDeniedException() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")))
+        );
+        AdminProfile adminProfile = new AdminProfile();
+        adminProfile.setFarmId(99L);
+
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));
+
+        assertThrows(AccessDeniedException.class, () -> workerService.getWorkerById(1L));
     }
 
     @Test
@@ -145,9 +212,38 @@ class WorkerServiceTest {
     }
 
     @Test
+    void addWorker_WorkerRole_ThrowsAccessDeniedException() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("workeruser", "pass", List.of(new SimpleGrantedAuthority("ROLE_WORKER")))
+        );
+        WorkerRequestDTO dto = new WorkerRequestDTO();
+
+        assertThrows(AccessDeniedException.class, () -> workerService.addWorker(dto));
+    }
+
+    @Test
+    void addWorker_PasswordTooShort_ThrowsIllegalArgumentException() {
+        WorkerRequestDTO dto = new WorkerRequestDTO();
+        dto.setTempPassword("123");
+
+        assertThrows(IllegalArgumentException.class, () -> workerService.addWorker(dto));
+    }
+
+    @Test
+    void addWorker_MissingFullName_ThrowsIllegalArgumentException() {
+        WorkerRequestDTO dto = new WorkerRequestDTO();
+        dto.setTempPassword("pass123");
+        dto.setFullName("");
+
+        assertThrows(IllegalArgumentException.class, () -> workerService.addWorker(dto));
+    }
+
+    @Test
     void addWorker_InvalidUsernameWithSpace_ThrowsException() {
         WorkerRequestDTO dto = new WorkerRequestDTO();
         dto.setUsername("invalid user");
+        dto.setTempPassword("pass123");
+        dto.setFullName("Worker Name");
 
         assertThrows(RuntimeException.class, () -> workerService.addWorker(dto));
     }
@@ -227,6 +323,20 @@ class WorkerServiceTest {
     }
 
     @Test
+    void updateWorker_AdminCannotEditAnotherFarm() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        AdminProfile profile = new AdminProfile();
+        profile.setFarmId(99L);
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(profile));
+
+        assertThrows(AccessDeniedException.class,
+                () -> workerService.updateWorker(1L, new WorkerRequestDTO()));
+        verify(workerRepository, never()).save(any());
+    }
+
+    @Test
     void deleteWorker_Success() {
         when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
         when(workerRepository.save(any(Worker.class))).thenAnswer(i -> i.getArgument(0));
@@ -235,6 +345,19 @@ class WorkerServiceTest {
 
         assertEquals("inactive", worker.getStatus());
         verify(workerRepository).save(worker);
+    }
+
+    @Test
+    void deleteWorker_AdminOtherFarm_ThrowsAccessDeniedException() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        AdminProfile profile = new AdminProfile();
+        profile.setFarmId(99L);
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(profile));
+
+        assertThrows(AccessDeniedException.class, () -> workerService.deleteWorker(1L));
+        verify(workerRepository, never()).save(any());
     }
 
     @Test
@@ -269,8 +392,14 @@ class WorkerServiceTest {
         when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
         when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(adminProfile));
 
-        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+        assertThrows(AccessDeniedException.class,
                 () -> workerService.resetWorkerPassword(1L, "newpass123", "adminuser"));
+    }
+
+    @Test
+    void resetWorkerPassword_PasswordTooShort_ThrowsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class,
+                () -> workerService.resetWorkerPassword(1L, "12345", "adminuser"));
     }
 
     @Test
@@ -280,19 +409,4 @@ class WorkerServiceTest {
         assertThrows(RuntimeException.class,
                 () -> workerService.resetWorkerPassword(99L, "newpass123", "adminuser"));
     }
-
-    @Test
-    void updateWorker_AdminCannotEditAnotherFarm() {
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "adminuser", "pass", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
-        AdminProfile profile = new AdminProfile();
-        profile.setFarmId(99L);
-        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
-        when(adminProfileRepository.findByUserUsername("adminuser")).thenReturn(Optional.of(profile));
-
-        assertThrows(org.springframework.security.access.AccessDeniedException.class,
-                () -> workerService.updateWorker(1L, new WorkerRequestDTO()));
-        verify(workerRepository, never()).save(any());
-    }
 }
-

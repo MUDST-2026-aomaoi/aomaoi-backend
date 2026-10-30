@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -51,5 +52,10 @@ public class GlobalExceptionHandler {
         String field = ex.getBindingResult().getFieldErrors().isEmpty() ? "request"
                 : ex.getBindingResult().getFieldErrors().getFirst().getField();
         return ResponseEntity.badRequest().body(Map.of("message", "Invalid " + field));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> handleMalformedRequest(HttpMessageNotReadableException ex) {
+        return ResponseEntity.badRequest().body(Map.of("message", "Invalid request body"));
     }
 }

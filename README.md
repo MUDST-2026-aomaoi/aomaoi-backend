@@ -152,6 +152,8 @@ Master changelog อยู่ที่ `src/main/resources/db/changelog/db.chang
 2. `002-seed-demo-data.sql` เพิ่มบัญชีและข้อมูลตัวอย่างเมื่อใช้ context `demo`
 3. `003-rename-demo-farms.sql` ปรับชื่อฟาร์มตัวอย่างโดยคง ID เดิม
 4. `004-e2e-run-tracking.sql` เพิ่มโครงสร้างติดตามข้อมูลตามรอบ Cypress E2E
+5. `005-salary-advances.sql` เพิ่มรายการเบิกเงินสดและสิ่งของ
+6. `006-lock-worker-farm-after-financial-activity.sql` ป้องกันการย้ายฟาร์มของคนงานที่มีประวัติค่าแรงหรือรายการเบิก
 
 Compose เรียก Liquibase ด้วย demo context ใน service `migrate` และแอปกำหนด Hibernate `ddl-auto=validate` เพื่อเช็คว่า entity ตรงกับ schema หลัง migration
 
@@ -184,6 +186,12 @@ Content-Type: application/json
 | Workers | `POST /api/workers/{id}/reset-password` | รีเซ็ตรหัสผ่านคนงานโดย admin หรือ superadmin |
 | Work logs | `GET /api/work-logs` | ดูบันทึกงานตามสิทธิ์ของผู้ใช้ |
 | Work logs | `POST /api/work-logs` | บันทึกงานและให้ backend คำนวณค่าจ้าง |
+| Salary advances | `POST /api/salary-advances` | Admin บันทึกการเบิกเงินสดหรือสิ่งของของคนงานในฟาร์มตนเอง |
+| Salary advances | `GET /api/salary-advances?page=0&size=100` | Admin ดูรายการเบิกของฟาร์มตนเอง; superadmin ดูทั้งหมด รวมรายการที่ยกเลิก โดยแบ่งหน้า |
+| Salary advances | `DELETE /api/salary-advances/{id}` | ยกเลิกรายการเบิกโดยเก็บประวัติ ไม่ลบถาวร |
+| Worker balances | `GET /api/worker-balances?page=0&size=100`, `GET /api/worker-balances/{workerId}` | Admin ดูยอดรายคนในฟาร์มตนเอง; superadmin ดูทั้งหมด โดยรายการรวมแบ่งหน้า |
+| Worker balances | `GET /api/worker-balances/me` | Worker ดูยอดของตัวเองเท่านั้น |
+| Financial dashboard | `GET /api/financial-dashboard` | Admin ดูค่าแรง งาน และยอดเบิกเฉพาะฟาร์ม; superadmin ดูภาพรวมทั้งหมด |
 | Audit | `GET /api/superadmin/audit-logs` | ดูประวัติการใช้งาน (superadmin) |
 
 ตัวอย่าง request สำหรับเข้าสู่ระบบ:
@@ -221,6 +229,32 @@ Content-Type: application/json
 ```
 
 Response ของ work log มี ID, ประเภทงาน, วันที่, คนงาน และยอดที่คำนวณแล้ว ทั้งชื่อ field ที่จำเป็นและการคำนวณขึ้นกับประเภทงาน ดูรูปแบบ request เฉพาะแต่ละงานได้ใน `WorkLogController` และ `WorkLogRequestDTO`
+
+### การเบิกล่วงหน้าและยอดหนี้ (Phase 2)
+
+ตัวอย่างการเบิกเงินสด:
+
+```json
+{"workerId": 1, "advanceDate": "2026-10-27", "type": "CASH", "amount": 300.00}
+```
+
+ตัวอย่างการเบิกสิ่งของ:
+
+```json
+{"workerId": 1, "advanceDate": "2026-10-27", "type": "GOODS", "amount": 125.50, "itemName": "ปุ๋ย"}
+```
+
+`amount` คือจำนวนเงินสดหรือมูลค่าสิ่งของ หน่วยบาท และต้องมากกว่า 0 โดยมีทศนิยมไม่เกินสองตำแหน่ง การสร้างสำเร็จตอบ `201` พร้อมข้อมูลรายการ รวม `id`, `recordedBy`, `createdAt` การยกเลิกรายการตอบ `200` พร้อม `cancelledAt` และ `cancelledBy` รายการที่ยกเลิกยังปรากฏในประวัติ แต่ไม่นำมาคิดยอดอีก
+
+ยอดรายคนคำนวณแบบสะสมจากฐานข้อมูล: `remainingBalance = totalEarnings - totalAdvances` โดย `inDebt` เป็น `true` เฉพาะเมื่อผลลัพธ์ติดลบ และ `outstandingDebt = max(-remainingBalance, 0)` ตัวอย่าง response:
+
+```json
+{"workerId": 1, "fullName": "สมชาย", "nickname": "ชาย", "totalEarnings": 1000.00, "totalAdvances": 1300.00, "remainingBalance": -300.00, "inDebt": true, "outstandingDebt": 300.00}
+```
+
+ยอด dashboard ใช้ข้อมูลสะสมทั้งหมด ณ เวลาที่เรียก API ค่า `cashAdvances` และ `goodsAdvances` เป็นสรุปค่าใช้จ่ายเฉพาะรายการเบิกล่วงหน้า ระบบยังไม่มีรายการจ่ายค่าแรงหรือค่าใช้จ่ายประเภทอื่น จึงไม่ควรตีความ `netBalance` ว่าเป็นเงินสดคงเหลือจริงของฟาร์ม
+
+API รายการรวมใช้ `page` เริ่มที่ 0 และ `size` ตั้งแต่ 1 ถึง 500 (ค่าเริ่มต้น 100) หากต้องการข้อมูลทั้งหมด ให้เรียกหน้าถัดไปจนได้รายการน้อยกว่า `size` รายการ เมื่อคนงานมีบันทึกงานหรือรายการเบิกแล้ว ฐานข้อมูลจะไม่อนุญาตให้เปลี่ยนฟาร์มของคนนั้น เพื่อไม่ให้ประวัติการเงินของฟาร์มเดิมย้ายไปอยู่ฟาร์มใหม่
 
 ## Authentication และสิทธิ์
 

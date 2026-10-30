@@ -17,7 +17,7 @@ import java.util.UUID;
 
 @Service
 public class E2eRunService {
-    private static final String[] TABLES = {"audit_logs", "work_logs", "worker", "admin_profile", "users", "farm"};
+    private static final String[] TABLES = {"audit_logs", "salary_advances", "work_logs", "worker", "admin_profile", "users", "farm"};
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
     private final PasswordEncoder encoder;

@@ -61,6 +61,15 @@ public class SalaryAdvanceService {
         return advances.stream().map(this::toResponse).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<SalaryAdvanceResponseDTO> listSelf() {
+        Worker worker = access.requireSelf();
+        return advanceRepository.findByWorkerIdAndCancelledAtIsNullOrderByAdvanceDateDescIdDesc(worker.getId())
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     private void validatePage(int page, int size) {
         if (page < 0 || size < 1 || size > 500) {
             throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 500");

@@ -1,6 +1,7 @@
 package com.aomaoi.backend.service;
 
 import com.aomaoi.backend.dto.WorkLogRequestDTO;
+import com.aomaoi.backend.dto.WorkLogResponseDTO;
 import com.aomaoi.backend.entity.WorkLog;
 import com.aomaoi.backend.entity.Worker;
 import com.aomaoi.backend.repository.WorkLogRepository;
@@ -14,10 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * WorkLogService - Business Logic สำหรับจัดการบันทึกผลงาน/ค่าแรง
@@ -48,9 +46,10 @@ public class WorkLogService {
      * - ถ้าเป็น Admin: จะเห็นเฉพาะบันทึกงานของคนงานในฟาร์มตัวเอง
      * - ถ้าเป็น SuperAdmin: จะเห็นทั้งหมด
      *
-     * @return List ของ Map ที่มีข้อมูล id, type, date, workerId, total และฟิลด์เฉพาะประเภท
+     * @return Stable response DTOs with the existing API field names
      */
-    public List<Map<String, Object>> getAllLogs() {
+    @Transactional(readOnly = true)
+    public List<WorkLogResponseDTO> getAllLogs() {
         Authentication auth = requireAuthentication();
         List<WorkLog> logs;
         if (hasRole(auth, "SUPERADMIN")) {
@@ -64,7 +63,7 @@ public class WorkLogService {
         } else {
             throw new AccessDeniedException("Unknown role");
         }
-        return logs.stream().map(this::logToMap).collect(Collectors.toList());
+        return logs.stream().map(WorkLogResponseDTO::from).toList();
     }
 
     /**
@@ -75,11 +74,11 @@ public class WorkLogService {
      * - อัปเดตยอดค่าแรงรวมของฟาร์ม
      *
      * @param dto ข้อมูลบันทึกงานจาก Frontend
-     * @return Map ข้อมูลบันทึกงานที่บันทึกสำเร็จ พร้อม id และ total ที่คำนวณแล้ว
+     * @return Response DTO containing the saved log and calculated total
      */
     @Transactional
-    public Map<String, Object> addLog(WorkLogRequestDTO dto) {
-        validatePositive(dto);
+    public WorkLogResponseDTO addLog(WorkLogRequestDTO dto) {
+        validateWorkType(dto);
         Authentication auth = requireAuthentication();
         if (!hasRole(auth, "ADMIN") && !hasRole(auth, "SUPERADMIN"))
             throw new AccessDeniedException("Work log creation requires admin access");
@@ -166,7 +165,7 @@ public class WorkLogService {
         String details = String.format("Added %s work log for %s (Total: %s THB)", saved.getType(), worker.getFullName(), saved.getTotal());
         this.auditLogService.logAction("CREATE_WORKLOG", currentUsername, workerUsername, details);
 
-        return logToMap(saved);
+        return WorkLogResponseDTO.from(saved);
     }
 
     /**
@@ -209,34 +208,20 @@ public class WorkLogService {
         };
     }
 
-    /**
-     * ตรวจสอบว่าค่าตัวเลขทั้งหมดที่ส่งมาต้องไม่ติดลบ
-     * ป้องกันการส่งข้อมูลที่ไม่สมเหตุสมผลจาก Frontend หรือ API
-     */
-    private void validatePositive(WorkLogRequestDTO dto) {
-        if (dto == null || dto.getType() == null || dto.getType().isBlank())
-            throw new IllegalArgumentException("Work type is required");
-        if (dto.getRows() != null && dto.getRows() < 0)
-            throw new IllegalArgumentException("rows cannot be negative");
-        if (dto.getWaPerRow() != null && dto.getWaPerRow() < 0)
-            throw new IllegalArgumentException("waPerRow cannot be negative");
-        if (dto.getFurrows() != null && dto.getFurrows() < 0)
-            throw new IllegalArgumentException("furrows cannot be negative");
-        if (dto.getWaPerFurrow() != null && dto.getWaPerFurrow() < 0)
-            throw new IllegalArgumentException("waPerFurrow cannot be negative");
-        if (dto.getDays() != null && dto.getDays() < 0)
-            throw new IllegalArgumentException("days cannot be negative");
-        if (dto.getDailyRate() != null && dto.getDailyRate().compareTo(BigDecimal.ZERO) < 0)
-            throw new IllegalArgumentException("dailyRate cannot be negative");
-        if (dto.getTanks() != null && dto.getTanks() < 0)
-            throw new IllegalArgumentException("tanks cannot be negative");
-    }
-
     private LocalDate parseDate(String value) {
         try {
             return LocalDate.parse(value);
         } catch (java.time.format.DateTimeParseException e) {
             throw new IllegalArgumentException("Date must use yyyy-MM-dd", e);
+        }
+    }
+
+    private void validateWorkType(WorkLogRequestDTO dto) {
+        if (dto == null || dto.getType() == null || dto.getType().isBlank()) {
+            throw new IllegalArgumentException("Work type is required");
+        }
+        if (!List.of("cutting", "planting", "watering", "spraying").contains(dto.getType())) {
+            throw new IllegalArgumentException("Unknown work type: " + dto.getType());
         }
     }
 
@@ -253,33 +238,9 @@ public class WorkLogService {
 
     private Long requireAdminFarm(String username) {
         return adminProfileRepository.findByUserUsername(username)
+                .filter(profile -> !"inactive".equals(profile.getStatus()) && profile.getFarmId() != null)
                 .map(profile -> profile.getFarmId())
-                .orElseThrow(() -> new AccessDeniedException("Admin has no farm"));
+                .orElseThrow(() -> new AccessDeniedException("Admin has no active farm"));
     }
 
-    /**
-     * แปลง WorkLog Entity เป็น Map สำหรับส่งกลับ Frontend
-     * รวมฟิลด์เฉพาะประเภทงาน (เช่น rows, tanks, startDate, endDate) เฉพาะที่มีค่า
-     */
-    private Map<String, Object> logToMap(WorkLog log) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", String.valueOf(log.getId()));
-        map.put("type", log.getType());
-        String dateStr = log.getStartDate() != null ? log.getStartDate().toString() : log.getWorkDate().toString();
-        map.put("date", dateStr);
-        map.put("startDate", dateStr);
-        map.put("endDate", log.getEndDate() != null ? log.getEndDate().toString() : dateStr);
-        map.put("workerId", String.valueOf(log.getWorker().getId()));
-        map.put("total", log.getTotal().doubleValue());
-
-        if (log.getRows() != null) map.put("rows", log.getRows());
-        if (log.getWaPerRow() != null) map.put("waPerRow", log.getWaPerRow());
-        if (log.getFurrows() != null) map.put("furrows", log.getFurrows());
-        if (log.getWaPerFurrow() != null) map.put("waPerFurrow", log.getWaPerFurrow());
-        if (log.getDays() != null) map.put("days", log.getDays());
-        if (log.getDailyRate() != null) map.put("dailyRate", log.getDailyRate().doubleValue());
-        if (log.getTanks() != null) map.put("tanks", log.getTanks());
-
-        return map;
-    }
 }

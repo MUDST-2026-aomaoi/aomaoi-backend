@@ -16,8 +16,6 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import jakarta.annotation.PostConstruct;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.function.Function;
 
 @Component
@@ -43,13 +41,10 @@ public class JwtUtil {
 
     // 1. Generate a new Token (Called when a user logs in successfully)
     public String generateToken(UserDetails userDetails, String role) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("role", role); // We embed the user's role directly into the token!
-        claims.put("credentialVersion", credentialVersion(userDetails));
-
         return Jwts.builder()
-                .setClaims(claims)
                 .setSubject(userDetails.getUsername())
+                .claim("role", role)
+                .claim("credentialVersion", credentialVersion(userDetails))
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + expirationTime))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
@@ -63,14 +58,14 @@ public class JwtUtil {
 
     // 3. Extract the Role from an existing Token
     public String extractRole(String token) {
-        Claims claims = extractAllClaims(token);
-        return (String) claims.get("role");
+        return extractClaim(token, claims -> claims.get("role", String.class));
     }
 
     // 4. Validate if the Token is real and hasn't expired
     public boolean validateToken(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
-        String issuedVersion = (String) extractAllClaims(token).get("credentialVersion");
+        String issuedVersion = extractClaim(token,
+                claims -> claims.get("credentialVersion", String.class));
         String currentVersion = credentialVersion(userDetails);
         return userDetails.isEnabled() && username.equals(userDetails.getUsername())
                 && issuedVersion != null && MessageDigest.isEqual(

@@ -1,13 +1,14 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.dto.FarmRequestDTO;
-import com.aomaoi.backend.entity.Farm;
+import com.aomaoi.backend.dto.FarmResponseDTO;
 import com.aomaoi.backend.service.FarmService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import jakarta.validation.Valid;
 
 /**
  * FarmController - จัดการ API เกี่ยวกับข้อมูลฟาร์ม
@@ -28,7 +29,7 @@ public class FarmController {
      * Response 200: [ { "id", "name", "location", "image", "adminCount", "workerCount", ... } ]
      */
     @GetMapping
-    public ResponseEntity<List<Farm>> getAllFarms() {
+    public ResponseEntity<List<FarmResponseDTO>> getAllFarms() {
         return ResponseEntity.ok(farmService.getAllFarms());
     }
 
@@ -39,7 +40,7 @@ public class FarmController {
      * Response 200: Farm object ที่สร้างสำเร็จ พร้อม id
      */
     @PostMapping
-    public ResponseEntity<Farm> addFarm(@RequestBody FarmRequestDTO dto) {
+    public ResponseEntity<FarmResponseDTO> addFarm(@Valid @RequestBody FarmRequestDTO dto) {
         return ResponseEntity.ok(farmService.addFarm(dto));
     }
 
@@ -50,7 +51,7 @@ public class FarmController {
      * Response 200: Farm object ที่อัปเดตแล้ว
      */
     @PutMapping("/{id}")
-    public ResponseEntity<Farm> updateFarm(@PathVariable Long id, @RequestBody FarmRequestDTO dto) {
+    public ResponseEntity<FarmResponseDTO> updateFarm(@PathVariable Long id, @Valid @RequestBody FarmRequestDTO dto) {
         return ResponseEntity.ok(farmService.updateFarm(id, dto));
     }
 

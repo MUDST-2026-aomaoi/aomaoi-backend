@@ -2,6 +2,7 @@ package com.aomaoi.backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -61,10 +62,46 @@ class SalaryAdvanceServiceTest {
     }
 
     @Test
+    void recordsCashAdvanceWithoutItemName() {
+        Worker worker = worker();
+        when(access.requireManager()).thenReturn(admin());
+        when(access.requireManagedWorker(1L)).thenReturn(worker);
+        when(advances.save(any(SalaryAdvance.class))).thenAnswer(call -> {
+            SalaryAdvance saved = call.getArgument(0);
+            saved.setId(9L);
+            return saved;
+        });
+
+        var result = service.create(new SalaryAdvanceRequestDTO(1L, LocalDate.of(2026, 10, 27),
+                AdvanceType.CASH, new BigDecimal("75.00"), null));
+
+        assertEquals(9L, result.id());
+        assertEquals(AdvanceType.CASH, result.type());
+        assertEquals(new BigDecimal("75.00"), result.amount());
+        assertNull(result.itemName());
+        assertEquals("admin1", result.recordedBy());
+        verify(audit).logAction("CREATE_SALARY_ADVANCE", "admin1", "worker1",
+                "Recorded CASH advance #9");
+    }
+
+    @Test
     void rejectsGoodsWithoutItemAndDoesNotSave() {
         when(access.requireManager()).thenReturn(admin());
         assertThrows(IllegalArgumentException.class, () -> service.create(new SalaryAdvanceRequestDTO(
                 1L, LocalDate.now(), AdvanceType.GOODS, new BigDecimal("20.00"), null)));
+        verify(advances, never()).save(any());
+    }
+
+    @Test
+    void rejectsBlankOrOverlongGoodsItem() {
+        when(access.requireManager()).thenReturn(admin());
+        var blankItem = new SalaryAdvanceRequestDTO(1L, LocalDate.now(), AdvanceType.GOODS,
+                new BigDecimal("20.00"), "   ");
+        var longItem = new SalaryAdvanceRequestDTO(1L, LocalDate.now(), AdvanceType.GOODS,
+                new BigDecimal("20.00"), "x".repeat(256));
+
+        assertThrows(IllegalArgumentException.class, () -> service.create(blankItem));
+        assertThrows(IllegalArgumentException.class, () -> service.create(longItem));
         verify(advances, never()).save(any());
     }
 
@@ -79,9 +116,34 @@ class SalaryAdvanceServiceTest {
     }
 
     @Test
+    void rejectsAmountWithMoreThanTwoDecimalPlacesOrBeyondColumnPrecision() {
+        when(access.requireManager()).thenReturn(admin());
+        var overScale = new SalaryAdvanceRequestDTO(1L, LocalDate.now(), AdvanceType.CASH,
+                new BigDecimal("20.001"), null);
+        var overPrecision = new SalaryAdvanceRequestDTO(1L, LocalDate.now(), AdvanceType.CASH,
+                new BigDecimal("100000000000000000.00"), null);
+
+        assertThrows(IllegalArgumentException.class, () -> service.create(overScale));
+        assertThrows(IllegalArgumentException.class, () -> service.create(overPrecision));
+        verify(advances, never()).save(any());
+    }
+
+    @Test
     void rejectsAdvanceForWorkerWithoutFarm() {
         Worker worker = worker();
         worker.setFarmId(null);
+        when(access.requireManager()).thenReturn(admin());
+        when(access.requireManagedWorker(1L)).thenReturn(worker);
+
+        assertThrows(IllegalArgumentException.class, () -> service.create(new SalaryAdvanceRequestDTO(
+                1L, LocalDate.now(), AdvanceType.CASH, new BigDecimal("20.00"), null)));
+        verify(advances, never()).save(any());
+    }
+
+    @Test
+    void rejectsAdvanceForInactiveWorker() {
+        Worker worker = worker();
+        worker.setStatus("inactive");
         when(access.requireManager()).thenReturn(admin());
         when(access.requireManagedWorker(1L)).thenReturn(worker);
 

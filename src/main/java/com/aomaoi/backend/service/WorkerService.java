@@ -45,14 +45,6 @@ public class WorkerService {
         Authentication auth = requireAuthentication();
         if (!hasRole(auth, "ADMIN") && !hasRole(auth, "SUPERADMIN"))
             throw new AccessDeniedException("Worker management requires admin access");
-        if (dto.getTempPassword() == null || dto.getTempPassword().length() < 6)
-            throw new IllegalArgumentException("Temporary password must be at least 6 characters");
-        if (dto.getFullName() == null || dto.getFullName().isBlank())
-            throw new IllegalArgumentException("Worker full name is required");
-        if (dto.getUsername() == null || !dto.getUsername().matches("^[\\w\\p{Punct}]+$")) {
-            throw new IllegalArgumentException("Username cannot contain spaces and must contain only characters, numbers, and special characters.");
-        }
-
         if (userRepository.existsByUsername(dto.getUsername())) {
             throw new IllegalArgumentException("Username already exists");
         }
@@ -91,9 +83,6 @@ public class WorkerService {
         worker.setAvatar(dto.getAvatar());
 
         if (dto.getUsername() != null && !dto.getUsername().equals(worker.getUser().getUsername())) {
-            if (!dto.getUsername().matches("^[\\w\\p{Punct}]+$")) {
-                throw new IllegalArgumentException("Username cannot contain spaces and must contain only characters, numbers, and special characters.");
-            }
             if (userRepository.existsByUsername(dto.getUsername())) {
                 throw new IllegalArgumentException("Username already exists");
             }
@@ -158,8 +147,9 @@ public class WorkerService {
 
     private Long requireAdminFarm(String username) {
         return adminProfileRepository.findByUserUsername(username)
+                .filter(profile -> !"inactive".equals(profile.getStatus()) && profile.getFarmId() != null)
                 .map(profile -> profile.getFarmId())
-                .orElseThrow(() -> new AccessDeniedException("Admin has no farm"));
+                .orElseThrow(() -> new AccessDeniedException("Admin has no active farm"));
     }
 
     private void requireWorkerAccess(Worker worker, boolean write) {

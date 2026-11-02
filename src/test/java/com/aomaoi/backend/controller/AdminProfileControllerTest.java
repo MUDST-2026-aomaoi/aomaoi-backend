@@ -1,6 +1,7 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.dto.AdminRequestDTO;
+import com.aomaoi.backend.dto.AdminProfileResponseDTO;
 import com.aomaoi.backend.entity.AdminProfile;
 import com.aomaoi.backend.service.AdminProfileService;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +40,7 @@ class AdminProfileControllerTest {
     void getAllAdmins() {
         when(adminService.getAllAdmins()).thenReturn(List.of(admin));
 
-        ResponseEntity<List<AdminProfile>> response = adminController.getAllAdmins();
+        ResponseEntity<List<AdminProfileResponseDTO>> response = adminController.getAllAdmins();
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, response.getBody().size());
@@ -48,10 +49,10 @@ class AdminProfileControllerTest {
     void getAdminById() {
         when(adminService.getAdminById(1L)).thenReturn(admin);
 
-        ResponseEntity<AdminProfile> response = adminController.getAdminById(1L);
+        ResponseEntity<AdminProfileResponseDTO> response = adminController.getAdminById(1L);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("Admin One", response.getBody().getFullName());
+        assertEquals("Admin One", response.getBody().fullName());
     }
 
     @Test
@@ -59,7 +60,7 @@ class AdminProfileControllerTest {
         AdminRequestDTO dto = new AdminRequestDTO();
         when(adminService.addAdmin(dto)).thenReturn(admin);
 
-        ResponseEntity<AdminProfile> response = adminController.addAdmin(dto);
+        ResponseEntity<AdminProfileResponseDTO> response = adminController.addAdmin(dto);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
@@ -70,7 +71,7 @@ class AdminProfileControllerTest {
         AdminRequestDTO dto = new AdminRequestDTO();
         when(adminService.updateAdmin(1L, dto)).thenReturn(admin);
 
-        ResponseEntity<AdminProfile> response = adminController.updateAdmin(1L, dto);
+        ResponseEntity<AdminProfileResponseDTO> response = adminController.updateAdmin(1L, dto);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());

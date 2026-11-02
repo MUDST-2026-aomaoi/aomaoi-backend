@@ -2,6 +2,7 @@ package com.aomaoi.backend.service;
 
 import com.aomaoi.backend.config.JwtUtil;
 import com.aomaoi.backend.dto.LoginRequest;
+import com.aomaoi.backend.dto.AuthResponseDTO;
 import com.aomaoi.backend.entity.AdminProfile;
 import com.aomaoi.backend.entity.User;
 import com.aomaoi.backend.entity.Worker;
@@ -20,6 +21,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -100,15 +102,12 @@ class AuthServiceTest {
         when(userRepository.findByUsername("superadmin")).thenReturn(Optional.of(superadminUser));
         when(jwtUtil.generateToken(any(), eq("superadmin"))).thenReturn("mock_token");
 
-        Map<String, Object> result = authService.login(request);
+        AuthResponseDTO result = authService.login(request);
 
-        assertTrue((Boolean) result.get("success"));
-        assertEquals("mock_token", result.get("token"));
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> userMap = (Map<String, Object>) result.get("user");
-        assertEquals("superadmin", userMap.get("fullName"));
-        assertEquals("superadmin", userMap.get("role"));
+        assertTrue(result.success());
+        assertEquals("mock_token", result.token());
+        assertEquals("superadmin", result.user().fullName());
+        assertEquals("superadmin", result.user().role());
     }
 
     @Test
@@ -127,14 +126,12 @@ class AuthServiceTest {
         when(jwtUtil.generateToken(any(), eq("admin"))).thenReturn("mock_token");
         when(adminProfileRepository.findByUserUsername("admin1")).thenReturn(Optional.of(profile));
 
-        Map<String, Object> result = authService.login(request);
+        AuthResponseDTO result = authService.login(request);
 
-        assertTrue((Boolean) result.get("success"));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> userMap = (Map<String, Object>) result.get("user");
-        assertEquals("Admin Name", userMap.get("fullName"));
-        assertEquals(10L, userMap.get("id"));
-        assertEquals("avatar.png", userMap.get("avatar"));
+        assertTrue(result.success());
+        assertEquals("Admin Name", result.user().fullName());
+        assertEquals(10L, result.user().id());
+        assertEquals("avatar.png", result.user().avatar());
     }
 
     @Test
@@ -153,13 +150,24 @@ class AuthServiceTest {
         when(jwtUtil.generateToken(any(), eq("worker"))).thenReturn("mock_token");
         when(workerRepository.findByUserUsername("worker1")).thenReturn(Optional.of(worker));
 
-        Map<String, Object> result = authService.login(request);
+        AuthResponseDTO result = authService.login(request);
 
-        assertTrue((Boolean) result.get("success"));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> userMap = (Map<String, Object>) result.get("user");
-        assertEquals("Worker Name", userMap.get("fullName"));
-        assertEquals(20L, userMap.get("id"));
+        assertTrue(result.success());
+        assertEquals("Worker Name", result.user().fullName());
+        assertEquals(20L, result.user().id());
+    }
+
+    @Test
+    void login_UserNotFound_ThrowsException() {
+        LoginRequest request = new LoginRequest();
+        request.setUsername("unknown");
+        request.setPassword("pass");
+
+        when(userDetailsService.loadUserByUsername("unknown")).thenReturn(userDetails);
+        when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
+
+        assertThrows(org.springframework.security.authentication.BadCredentialsException.class,
+                () -> authService.login(request));
     }
 
     @Test
@@ -271,5 +279,27 @@ class AuthServiceTest {
         RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.login(request));
         assertEquals("Worker is inactive", ex.getMessage());
     }
-}
 
+    @Test
+    void refreshToken_Success() {
+        when(userRepository.findByUsername("admin1")).thenReturn(Optional.of(adminUser));
+        when(userDetailsService.loadUserByUsername("admin1")).thenReturn(userDetails);
+        when(jwtUtil.generateToken(userDetails, "admin")).thenReturn("refreshed_jwt_token");
+
+        String token = authService.refreshToken("admin1");
+
+        assertNotNull(token);
+        assertEquals("refreshed_jwt_token", token);
+        verify(jwtUtil).generateToken(userDetails, "admin");
+    }
+
+    @Test
+    void refreshToken_UserNotFound_ThrowsException() {
+        when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> authService.refreshToken("unknown"));
+        assertEquals("User not found", ex.getMessage());
+        verify(userDetailsService, never()).loadUserByUsername(any());
+    }
+}

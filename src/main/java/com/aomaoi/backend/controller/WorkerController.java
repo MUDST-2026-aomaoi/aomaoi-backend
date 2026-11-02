@@ -1,14 +1,17 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.dto.WorkerRequestDTO;
-import com.aomaoi.backend.entity.Worker;
+import com.aomaoi.backend.dto.WorkerResponseDTO;
+import com.aomaoi.backend.dto.ResetPasswordRequestDTO;
 import com.aomaoi.backend.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
+import jakarta.validation.Valid;
 
 /**
  * WorkerController - จัดการ API เกี่ยวกับข้อมูลคนงาน
@@ -28,21 +31,21 @@ public class WorkerController {
      * - Admin: เห็นเฉพาะคนงานในฟาร์มตัวเอง
      * - SuperAdmin: เห็นทั้งหมด
      *
-     * Response 200: [ { "id", "fullName", "nickname", "phone", "status", "farmId", "user": {...} } ]
+     * Response 200: [ { "id", "fullName", "nickname", "phone", "status", "farmId", "username" } ]
      */
     @GetMapping
-    public ResponseEntity<List<Worker>> getAllWorkers() {
-        return ResponseEntity.ok(workerService.getAllWorkers());
+    public ResponseEntity<List<WorkerResponseDTO>> getAllWorkers() {
+        return ResponseEntity.ok(workerService.getAllWorkers().stream().map(WorkerResponseDTO::from).toList());
     }
 
     /**
      * GET /api/workers/{id} - ดึงข้อมูลคนงานตาม ID
      *
-     * Response 200: { "id", "fullName", "nickname", "phone", "status", "farmId", "user": {...} }
+     * Response 200: { "id", "fullName", "nickname", "phone", "status", "farmId", "username" }
      */
     @GetMapping("/{id}")
-    public ResponseEntity<Worker> getWorkerById(@PathVariable Long id) {
-        return ResponseEntity.ok(workerService.getWorkerById(id));
+    public ResponseEntity<WorkerResponseDTO> getWorkerById(@PathVariable Long id) {
+        return ResponseEntity.ok(WorkerResponseDTO.from(workerService.getWorkerById(id)));
     }
 
     /**
@@ -53,8 +56,8 @@ public class WorkerController {
      * Response 500: RuntimeException ถ้า username ซ้ำ หรือมีช่องว่าง
      */
     @PostMapping
-    public ResponseEntity<Worker> addWorker(@RequestBody WorkerRequestDTO dto) {
-        return ResponseEntity.ok(workerService.addWorker(dto));
+    public ResponseEntity<WorkerResponseDTO> addWorker(@Validated(WorkerRequestDTO.Create.class) @RequestBody WorkerRequestDTO dto) {
+        return ResponseEntity.ok(WorkerResponseDTO.from(workerService.addWorker(dto)));
     }
 
     /**
@@ -64,8 +67,8 @@ public class WorkerController {
      * Response 200: Worker object ที่อัปเดตแล้ว
      */
     @PutMapping("/{id}")
-    public ResponseEntity<Worker> updateWorker(@PathVariable Long id, @RequestBody WorkerRequestDTO dto) {
-        return ResponseEntity.ok(workerService.updateWorker(id, dto));
+    public ResponseEntity<WorkerResponseDTO> updateWorker(@PathVariable Long id, @Valid @RequestBody WorkerRequestDTO dto) {
+        return ResponseEntity.ok(WorkerResponseDTO.from(workerService.updateWorker(id, dto)));
     }
 
     /**
@@ -89,12 +92,8 @@ public class WorkerController {
      * Response 200: (empty body)
      */
     @PostMapping("/{id}/reset-password")
-    public ResponseEntity<Void> resetPassword(@PathVariable Long id, @RequestBody java.util.Map<String, String> body, Authentication authentication) {
-        String newPassword = body.get("newPassword");
-        if (newPassword == null || newPassword.length() < 6) {
-            return ResponseEntity.badRequest().build();
-        }
-        workerService.resetWorkerPassword(id, newPassword, authentication.getName());
+    public ResponseEntity<Void> resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordRequestDTO request, Authentication authentication) {
+        workerService.resetWorkerPassword(id, request.newPassword(), authentication.getName());
         return ResponseEntity.ok().build();
     }
 }

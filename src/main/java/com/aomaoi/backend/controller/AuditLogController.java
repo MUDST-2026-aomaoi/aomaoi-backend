@@ -1,6 +1,6 @@
 package com.aomaoi.backend.controller;
 
-import com.aomaoi.backend.entity.AuditLog;
+import com.aomaoi.backend.dto.AuditLogResponseDTO;
 import com.aomaoi.backend.service.AuditLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +31,7 @@ public class AuditLogController {
      * Response 200: [ { "id", "action", "performedBy", "targetUser", "timestamp", "details" } ]
      */
     @GetMapping
-    public ResponseEntity<List<AuditLog>> getAuditLogs() {
-        return ResponseEntity.ok(auditLogService.getAllLogs());
+    public ResponseEntity<List<AuditLogResponseDTO>> getAuditLogs() {
+        return ResponseEntity.ok(auditLogService.getAllLogs().stream().map(AuditLogResponseDTO::from).toList());
     }
 }

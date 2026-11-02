@@ -71,7 +71,7 @@ public class FinancialAccessService {
 
     private Long requireAdminFarm(String username) {
         return adminProfileRepository.findByUserUsername(username)
-                .filter(profile -> !"inactive".equals(profile.getStatus()))
+                .filter(profile -> !"inactive".equals(profile.getStatus()) && profile.getFarmId() != null)
                 .map(profile -> profile.getFarmId())
                 .orElseThrow(() -> new AccessDeniedException("Admin has no active farm"));
     }

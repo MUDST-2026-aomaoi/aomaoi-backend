@@ -1,6 +1,8 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.dto.WorkerRequestDTO;
+import com.aomaoi.backend.dto.WorkerResponseDTO;
+import com.aomaoi.backend.dto.ResetPasswordRequestDTO;
 import com.aomaoi.backend.entity.Worker;
 import com.aomaoi.backend.service.WorkerService;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +41,7 @@ class WorkerControllerTest {
     void getAllWorkers() {
         when(workerService.getAllWorkers()).thenReturn(List.of(worker));
 
-        ResponseEntity<List<Worker>> response = workerController.getAllWorkers();
+        ResponseEntity<List<WorkerResponseDTO>> response = workerController.getAllWorkers();
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, response.getBody().size());
@@ -49,10 +51,10 @@ class WorkerControllerTest {
     void getWorkerById() {
         when(workerService.getWorkerById(1L)).thenReturn(worker);
 
-        ResponseEntity<Worker> response = workerController.getWorkerById(1L);
+        ResponseEntity<WorkerResponseDTO> response = workerController.getWorkerById(1L);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("Worker One", response.getBody().getFullName());
+        assertEquals("Worker One", response.getBody().fullName());
     }
 
     @Test
@@ -60,7 +62,7 @@ class WorkerControllerTest {
         WorkerRequestDTO dto = new WorkerRequestDTO();
         when(workerService.addWorker(dto)).thenReturn(worker);
 
-        ResponseEntity<Worker> response = workerController.addWorker(dto);
+        ResponseEntity<WorkerResponseDTO> response = workerController.addWorker(dto);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
@@ -71,7 +73,7 @@ class WorkerControllerTest {
         WorkerRequestDTO dto = new WorkerRequestDTO();
         when(workerService.updateWorker(1L, dto)).thenReturn(worker);
 
-        ResponseEntity<Worker> response = workerController.updateWorker(1L, dto);
+        ResponseEntity<WorkerResponseDTO> response = workerController.updateWorker(1L, dto);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
@@ -93,33 +95,11 @@ class WorkerControllerTest {
         when(auth.getName()).thenReturn("adminuser");
         doNothing().when(workerService).resetWorkerPassword(1L, "newPassword123", "adminuser");
 
-        ResponseEntity<Void> response = workerController.resetPassword(1L, java.util.Map.of("newPassword", "newPassword123"), auth);
+        ResponseEntity<Void> response = workerController.resetPassword(1L, new ResetPasswordRequestDTO("newPassword123"), auth);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(workerService).resetWorkerPassword(1L, "newPassword123", "adminuser");
     }
 
-    @Test
-    void resetPassword_TooShort_ReturnsBadRequest() {
-        org.springframework.security.core.Authentication auth = mock(org.springframework.security.core.Authentication.class);
-
-        ResponseEntity<Void> response = workerController.resetPassword(1L, java.util.Map.of("newPassword", "123"), auth);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        verify(workerService, never()).resetWorkerPassword(anyLong(), anyString(), anyString());
-    }
-
-    @Test
-    void resetPassword_NullPassword_ReturnsBadRequest() {
-        org.springframework.security.core.Authentication auth = mock(org.springframework.security.core.Authentication.class);
-
-        java.util.Map<String, String> body = new java.util.HashMap<>();
-        body.put("newPassword", null);
-
-        ResponseEntity<Void> response = workerController.resetPassword(1L, body, auth);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        verify(workerService, never()).resetWorkerPassword(anyLong(), anyString(), anyString());
-    }
 }
 

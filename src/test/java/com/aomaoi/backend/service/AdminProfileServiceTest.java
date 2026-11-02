@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -117,6 +118,11 @@ class AdminProfileServiceTest {
     }
 
     @Test
+    void addAdmin_NullDto_ThrowsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> adminProfileService.addAdmin(null));
+    }
+
+    @Test
     void addAdmin_UsernameExists_ThrowsException() {
         AdminRequestDTO dto = new AdminRequestDTO();
         dto.setUsername("existingadmin");
@@ -147,6 +153,29 @@ class AdminProfileServiceTest {
     }
 
     @Test
+    void updateAdmin_SameUsername_DoesNotCheckDuplicate() {
+        AdminRequestDTO dto = new AdminRequestDTO();
+        dto.setUsername("adminuser");
+        dto.setFullName("Updated Admin");
+
+        when(adminRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(adminRepository.save(any(AdminProfile.class))).thenAnswer(i -> i.getArgument(0));
+
+        AdminProfile updated = adminProfileService.updateAdmin(1L, dto);
+
+        assertEquals("Updated Admin", updated.getFullName());
+        verify(userRepository, never()).existsByUsername(any());
+    }
+
+    @Test
+    void updateAdmin_NotFound_ThrowsNoSuchElementException() {
+        AdminRequestDTO dto = new AdminRequestDTO();
+        when(adminRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementException.class, () -> adminProfileService.updateAdmin(99L, dto));
+    }
+
+    @Test
     void updateAdmin_DuplicateUsername_ThrowsException() {
         AdminRequestDTO dto = new AdminRequestDTO();
         dto.setUsername("existinguser");
@@ -167,7 +196,7 @@ class AdminProfileServiceTest {
         dto.setFarmId(99L);
         when(farmRepository.findById(99L)).thenReturn(Optional.empty());
 
-        java.util.NoSuchElementException ex = assertThrows(java.util.NoSuchElementException.class,
+        NoSuchElementException ex = assertThrows(NoSuchElementException.class,
                 () -> adminProfileService.addAdmin(dto));
 
         assertEquals("Farm not found", ex.getMessage());
@@ -180,6 +209,8 @@ class AdminProfileServiceTest {
     void addAdmin_MissingFarm_RejectsBeforeSavingUser() {
         AdminRequestDTO dto = new AdminRequestDTO();
         dto.setUsername("admin2");
+        dto.setFullName("Admin Two");
+        dto.setTempPassword("temp123");
 
         assertThrows(IllegalArgumentException.class, () -> adminProfileService.addAdmin(dto));
         verify(userRepository, never()).save(any());
@@ -193,7 +224,7 @@ class AdminProfileServiceTest {
         when(adminRepository.findById(1L)).thenReturn(Optional.of(admin));
         when(farmRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThrows(java.util.NoSuchElementException.class, () -> adminProfileService.updateAdmin(1L, dto));
+        assertThrows(NoSuchElementException.class, () -> adminProfileService.updateAdmin(1L, dto));
         assertEquals(10L, admin.getFarmId());
         verify(adminRepository, never()).save(any());
     }
@@ -208,5 +239,11 @@ class AdminProfileServiceTest {
         assertEquals("inactive", admin.getStatus());
         verify(adminRepository).save(admin);
     }
-}
 
+    @Test
+    void deleteAdmin_NotFound_ThrowsNoSuchElementException() {
+        when(adminRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementException.class, () -> adminProfileService.deleteAdmin(99L));
+    }
+}

@@ -1,7 +1,7 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.dto.FarmRequestDTO;
-import com.aomaoi.backend.entity.Farm;
+import com.aomaoi.backend.dto.FarmResponseDTO;
 import com.aomaoi.backend.service.FarmService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,20 +26,13 @@ class FarmControllerTest {
     @InjectMocks
     private FarmController farmController;
 
-    private Farm farm;
-
-    @BeforeEach
-    void setUp() {
-        farm = new Farm();
-        farm.setId(1L);
-        farm.setName("Farm One");
-    }
-
     @Test
     void getAllFarms() {
+        FarmResponseDTO farm = new FarmResponseDTO(1L, "Farm One", null, null,
+                0, 0, java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO, "active", null);
         when(farmService.getAllFarms()).thenReturn(List.of(farm));
 
-        ResponseEntity<List<Farm>> response = farmController.getAllFarms();
+        ResponseEntity<List<FarmResponseDTO>> response = farmController.getAllFarms();
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, response.getBody().size());
@@ -48,9 +41,10 @@ class FarmControllerTest {
     @Test
     void addFarm() {
         FarmRequestDTO dto = new FarmRequestDTO();
-        when(farmService.addFarm(dto)).thenReturn(farm);
+        when(farmService.addFarm(dto)).thenReturn(new FarmResponseDTO(1L, "Farm One", null, null,
+                0, 0, java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO, "active", null));
 
-        ResponseEntity<Farm> response = farmController.addFarm(dto);
+        ResponseEntity<FarmResponseDTO> response = farmController.addFarm(dto);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
@@ -59,9 +53,10 @@ class FarmControllerTest {
     @Test
     void updateFarm() {
         FarmRequestDTO dto = new FarmRequestDTO();
-        when(farmService.updateFarm(1L, dto)).thenReturn(farm);
+        when(farmService.updateFarm(1L, dto)).thenReturn(new FarmResponseDTO(1L, "Farm One", null, null,
+                0, 0, java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO, "active", null));
 
-        ResponseEntity<Farm> response = farmController.updateFarm(1L, dto);
+        ResponseEntity<FarmResponseDTO> response = farmController.updateFarm(1L, dto);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());

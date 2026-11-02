@@ -1,6 +1,8 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.dto.WorkLogRequestDTO;
+import com.aomaoi.backend.dto.WorkLogResponseDTO;
+import java.math.BigDecimal;
 import com.aomaoi.backend.service.WorkLogService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,9 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
@@ -28,11 +28,11 @@ class WorkLogControllerTest {
 
     @Test
     void getAllLogs() {
-        Map<String, Object> logMap = new HashMap<>();
-        logMap.put("id", "1");
-        when(workLogService.getAllLogs()).thenReturn(List.of(logMap));
+        WorkLogResponseDTO log = new WorkLogResponseDTO("1", "cutting", "2026-01-01", "2026-01-01",
+                "2026-01-01", "2", new BigDecimal("10.00"), null, null, null, null, null, null, null);
+        when(workLogService.getAllLogs()).thenReturn(List.of(log));
 
-        ResponseEntity<List<Map<String, Object>>> response = workLogController.getAllLogs();
+        ResponseEntity<List<WorkLogResponseDTO>> response = workLogController.getAllLogs();
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, response.getBody().size());
@@ -41,13 +41,13 @@ class WorkLogControllerTest {
     @Test
     void addLog() {
         WorkLogRequestDTO dto = new WorkLogRequestDTO();
-        Map<String, Object> logMap = new HashMap<>();
-        logMap.put("id", "1");
-        when(workLogService.addLog(dto)).thenReturn(logMap);
+        WorkLogResponseDTO log = new WorkLogResponseDTO("1", "cutting", "2026-01-01", "2026-01-01",
+                "2026-01-01", "2", new BigDecimal("10.00"), null, null, null, null, null, null, null);
+        when(workLogService.addLog(dto)).thenReturn(log);
 
-        ResponseEntity<Map<String, Object>> response = workLogController.addLog(dto);
+        ResponseEntity<WorkLogResponseDTO> response = workLogController.addLog(dto);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("1", response.getBody().get("id"));
+        assertEquals("1", response.getBody().id());
     }
 }

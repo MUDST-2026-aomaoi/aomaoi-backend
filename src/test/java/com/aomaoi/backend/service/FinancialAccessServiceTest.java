@@ -51,6 +51,27 @@ class FinancialAccessServiceTest {
     }
 
     @Test
+    void inactiveAdminCannotAccessFarmFinancialData() {
+        authenticate("admin1", "ADMIN");
+        AdminProfile admin = new AdminProfile();
+        admin.setFarmId(1L);
+        admin.setStatus("inactive");
+        when(admins.findByUserUsername("admin1")).thenReturn(Optional.of(admin));
+
+        assertThrows(AccessDeniedException.class, () -> access.managedWorkersPage(0, 100));
+    }
+
+    @Test
+    void adminWithoutFarmCannotAccessFarmFinancialData() {
+        authenticate("admin1", "ADMIN");
+        AdminProfile admin = new AdminProfile();
+        admin.setStatus("active");
+        when(admins.findByUserUsername("admin1")).thenReturn(Optional.of(admin));
+
+        assertThrows(AccessDeniedException.class, () -> access.managedWorkersPage(0, 100));
+    }
+
+    @Test
     void workerCannotManageAdvances() {
         authenticate("worker1", "WORKER");
         assertThrows(AccessDeniedException.class, access::requireManager);

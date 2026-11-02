@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -71,5 +72,54 @@ class DashboardServiceTest {
         assertEquals(BigDecimal.valueOf(350.0), overview.getTotalThisMonth());
         assertEquals(1L, overview.getTodayWorkLogs());
         assertEquals(1L, overview.getWorkersToday());
+    }
+
+    @Test
+    void getOverview_EmptyDatabase_ReturnsZeros() {
+        when(workerRepository.count()).thenReturn(0L);
+        when(workerRepository.countByStatus("active")).thenReturn(0L);
+        when(workLogRepository.findAll()).thenReturn(Collections.emptyList());
+        when(workLogRepository.findByWorkDateBetween(any(), any())).thenReturn(Collections.emptyList());
+
+        OverviewResponseDTO overview = dashboardService.getOverview();
+
+        assertNotNull(overview);
+        assertEquals(0L, overview.getTotalWorkers());
+        assertEquals(0L, overview.getActiveWorkers());
+        assertEquals(0L, overview.getTotalWorkLogs());
+        assertEquals(BigDecimal.ZERO, overview.getTotalAllTime());
+        assertEquals(BigDecimal.ZERO, overview.getTotalThisMonth());
+        assertEquals(0L, overview.getTodayWorkLogs());
+        assertEquals(0L, overview.getWorkersToday());
+    }
+
+    @Test
+    void getOverview_MultipleWorkersSameDay_CountsDistinctWorkers() {
+        Worker worker2 = new Worker();
+        worker2.setId(2L);
+
+        WorkLog log3 = new WorkLog();
+        log3.setId(12L);
+        log3.setWorker(worker); // same worker as log1
+        log3.setWorkDate(LocalDate.now());
+        log3.setTotal(BigDecimal.valueOf(100.0));
+
+        WorkLog log4 = new WorkLog();
+        log4.setId(13L);
+        log4.setWorker(worker2); // distinct worker
+        log4.setWorkDate(LocalDate.now());
+        log4.setTotal(BigDecimal.valueOf(250.0));
+
+        when(workerRepository.count()).thenReturn(2L);
+        when(workerRepository.countByStatus("active")).thenReturn(2L);
+        when(workLogRepository.findAll()).thenReturn(List.of(log1, log3, log4));
+        when(workLogRepository.findByWorkDateBetween(any(), any())).thenReturn(List.of(log1, log3, log4));
+
+        OverviewResponseDTO overview = dashboardService.getOverview();
+
+        assertNotNull(overview);
+        assertEquals(3L, overview.getTodayWorkLogs());
+        assertEquals(2L, overview.getWorkersToday()); // worker 1 and worker 2
+        assertEquals(BigDecimal.valueOf(500.0), overview.getTotalThisMonth());
     }
 }

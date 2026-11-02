@@ -1,13 +1,13 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.dto.WorkLogRequestDTO;
+import com.aomaoi.backend.dto.WorkLogResponseDTO;
 import com.aomaoi.backend.service.WorkLogService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * WorkLogController - จัดการ API เกี่ยวกับบันทึกผลงาน/ค่าแรง
@@ -33,7 +33,7 @@ public class WorkLogController {
      * Response 200: [ { "id", "type", "date", "workerId", "total", ...ฟิลด์เฉพาะประเภท } ]
      */
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> getAllLogs() {
+    public ResponseEntity<List<WorkLogResponseDTO>> getAllLogs() {
         return ResponseEntity.ok(workLogService.getAllLogs());
     }
 
@@ -50,7 +50,7 @@ public class WorkLogController {
      * Response 200: { "id", "type", "date", "workerId", "total", "days", "startDate", "endDate", ... }
      */
     @PostMapping
-    public ResponseEntity<Map<String, Object>> addLog(@Valid @RequestBody WorkLogRequestDTO dto) {
+    public ResponseEntity<WorkLogResponseDTO> addLog(@Valid @RequestBody WorkLogRequestDTO dto) {
         return ResponseEntity.ok(workLogService.addLog(dto));
     }
 }

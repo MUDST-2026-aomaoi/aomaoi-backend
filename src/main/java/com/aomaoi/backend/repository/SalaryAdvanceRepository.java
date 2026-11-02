@@ -28,6 +28,9 @@ public interface SalaryAdvanceRepository extends JpaRepository<SalaryAdvance, Lo
     @EntityGraph(attributePaths = "worker")
     Page<SalaryAdvance> findByWorkerFarmIdOrderByAdvanceDateDescIdDesc(Long farmId, Pageable pageable);
 
+    @EntityGraph(attributePaths = "worker")
+    List<SalaryAdvance> findByWorkerIdAndCancelledAtIsNullOrderByAdvanceDateDescIdDesc(Long workerId);
+
     @Query("select a.worker.id, sum(a.amount) from SalaryAdvance a "
             + "where a.cancelledAt is null and a.worker.id in :workerIds group by a.worker.id")
     List<Object[]> totalsByWorkerIds(@Param("workerIds") Collection<Long> workerIds);

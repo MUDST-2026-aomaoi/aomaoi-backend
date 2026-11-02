@@ -45,6 +45,7 @@ public class SecurityConfig {
                 // SuperAdmin only: audit trail, and creating/editing/deleting farms & admins
                 .requestMatchers("/api/superadmin/**").hasRole("SUPERADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/worker-balances/me").hasRole("WORKER")
+                .requestMatchers(HttpMethod.GET, "/api/salary-advances/me").hasRole("WORKER")
                 .requestMatchers("/api/salary-advances", "/api/salary-advances/**",
                         "/api/financial-dashboard", "/api/worker-balances",
                         "/api/worker-balances/*").hasAnyRole("ADMIN", "SUPERADMIN")

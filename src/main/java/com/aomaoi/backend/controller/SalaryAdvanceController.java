@@ -34,6 +34,11 @@ public class SalaryAdvanceController {
         return service.listForManager(page, size);
     }
 
+    @GetMapping("/me")
+    public List<SalaryAdvanceResponseDTO> me() {
+        return service.listSelf();
+    }
+
     @DeleteMapping("/{id}")
     public SalaryAdvanceResponseDTO cancel(@PathVariable Long id) {
         return service.cancel(id);

@@ -1,10 +1,11 @@
 package com.aomaoi.backend.config;
 
 import jakarta.servlet.http.HttpServletResponse;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -13,19 +14,29 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.logout.LogoutFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
-public class SecurityConfig {
+public class SecurityConfig implements WebMvcConfigurer {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final MeterRegistry meterRegistry;
+    private final BusinessOperationMetricsInterceptor businessMetrics;
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(businessMetrics);
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
@@ -41,6 +52,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/test-support/e2e-readiness").permitAll()
                 .requestMatchers("/api/test-support/runs", "/api/test-support/runs/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                // Prometheus is exposed only on the private management port (not published by Compose).
+                .requestMatchers(HttpMethod.GET, "/actuator/prometheus").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // SuperAdmin only: audit trail, and creating/editing/deleting farms & admins
                 .requestMatchers("/api/superadmin/**").hasRole("SUPERADMIN")
@@ -70,6 +83,7 @@ public class SecurityConfig {
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
                 })
             )
+            .addFilterBefore(new SecurityOutcomeMetricsFilter(meterRegistry), LogoutFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(new E2eRequestFilter(runs, manager, jdbc), JwtAuthenticationFilter.class);
 

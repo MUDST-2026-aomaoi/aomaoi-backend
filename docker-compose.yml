@@ -8,6 +8,7 @@ services:
     container_name: aomaoi-app
     ports:
       - "8081:8080"
+      - "127.0.0.1:8083:8083"
     env_file:
       - .env
     environment:
@@ -16,10 +17,16 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-aomaoi_password}
       SPRING_LIQUIBASE_ENABLED: "false"
       APP_SEED_ENABLED: "false"
+      LOGGING_FILE_NAME: /var/log/aomaoi/aomaoi.log
+      MANAGEMENT_SERVER_PORT: 8083
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.1}
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://tempo:4318/v1/traces
     depends_on:
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
+    volumes:
+      - app_logs:/var/log/aomaoi
 
   postgres:
     image: postgres:15-alpine
@@ -68,6 +75,69 @@ services:
       - app
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=15d", "--web.enable-lifecycle"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.5.3
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.8.2
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo_data:/var/tempo
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.10.2
+    command: ["run", "/etc/alloy/config.alloy"]
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - app_logs:/var/log/aomaoi:ro
+      - alloy_positions:/var/lib/alloy/data
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-aomaoi-local-only-change-this}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     name: aomaoi_postgres_data
+  prometheus_data:
+  loki_data:
+  tempo_data:
+  grafana_data:
+  alloy_positions:
+  app_logs:

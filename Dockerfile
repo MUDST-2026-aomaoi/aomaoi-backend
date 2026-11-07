@@ -16,6 +16,7 @@ RUN ./mvnw package -DskipTests -B
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid 10001 --no-create-home app
+RUN mkdir -p /var/log/aomaoi && chown 10001:10001 /var/log/aomaoi
 COPY --from=package --chown=10001:10001 /app/target/*.jar app.jar
 USER 10001:10001
 EXPOSE 8080

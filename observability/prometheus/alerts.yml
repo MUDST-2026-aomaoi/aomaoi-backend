@@ -1,0 +1,38 @@
+groups:
+  - name: aomaoi
+    rules:
+      - alert: AomaoiBackendUnavailable
+        expr: up{job="aomaoi-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: AOMAOI backend metrics endpoint is unavailable
+      - alert: AomaoiHighHttp5xxRate
+        expr: sum(rate(http_server_requests_seconds_count{application="aomaoi-backend",status=~"5.."}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application="aomaoi-backend"}[5m])), 0.1) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5% of AOMAOI HTTP requests are returning 5xx
+      - alert: AomaoiHighP95Latency
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application="aomaoi-backend"}[5m]))) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: AOMAOI HTTP p95 latency is above 2 seconds
+      - alert: AomaoiDatabasePoolSaturated
+        expr: hikaricp_connections_pending{application="aomaoi-backend"} > 0 or (hikaricp_connections_active{application="aomaoi-backend"} / clamp_min(hikaricp_connections_max{application="aomaoi-backend"}, 1)) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: AOMAOI database connection pool is near exhaustion
+      - alert: AomaoiBusinessOperationFailures
+        expr: sum(rate(aomaoi_business_operation_outcomes_total{outcome="technical_failure",operation=~"work_record_create|salary_advance_create|salary_advance_cancel|financial_dashboard_read|worker_balance_read"}[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: AOMAOI financial or wage operations are repeatedly failing

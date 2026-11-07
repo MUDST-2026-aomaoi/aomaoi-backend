@@ -1,5 +1,6 @@
 package com.aomaoi.backend.config;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,7 +13,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SecurityConfigTest {
 
-    private final SecurityConfig securityConfig = new SecurityConfig(null);
+    private static final SimpleMeterRegistry METER_REGISTRY = new SimpleMeterRegistry();
+    private final SecurityConfig securityConfig = new SecurityConfig(
+            null,
+            METER_REGISTRY,
+            new BusinessOperationMetricsInterceptor(METER_REGISTRY));
 
     @Test
     void passwordEncoder_UsesBCrypt() {

@@ -1,0 +1,12 @@
+{
+  "uid": "aomaoi-logs-traces",
+  "title": "AOMAOI Logs and Traces",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "templating": {"list":[{"name":"level","type":"custom","query":"ERROR,WARN,INFO,DEBUG","current":{"text":"ERROR","value":"ERROR"}}]},
+  "panels": [
+    {"id":1,"type":"logs","title":"Backend logs (select a line to follow traceId)","gridPos":{"x":0,"y":0,"w":24,"h":15},"datasource":{"type":"loki","uid":"loki"},"targets":[{"expr":"{service=\"aomaoi-backend\", level=~\"$level\"}","refId":"A"}],"options":{"showTime":true,"showLabels":true,"wrapLogMessage":true,"sortOrder":"Descending"}},
+    {"id":2,"type":"text","title":"Trace investigation","gridPos":{"x":0,"y":15,"w":24,"h":5},"options":{"mode":"markdown","content":"Open **Explore → Tempo** to search traces with `{resource.service.name=\"aomaoi-backend\"}`. Select a trace to open matching backend logs; log lines include `traceId` and `spanId`. Sampling defaults to 10% through `TRACING_SAMPLING_PROBABILITY` in `.env`."}}
+  ]
+}

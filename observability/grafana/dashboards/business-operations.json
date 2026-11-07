@@ -1,0 +1,13 @@
+{
+  "uid": "aomaoi-business-operations",
+  "title": "AOMAOI Business Operations",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {"id":1,"type":"timeseries","title":"Operation attempts","gridPos":{"x":0,"y":0,"w":12,"h":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum by (operation) (rate(aomaoi_business_operation_attempts_total[5m]))","legendFormat":"{{operation}}"}]},
+    {"id":2,"type":"timeseries","title":"Operation outcomes","gridPos":{"x":12,"y":0,"w":12,"h":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum by (operation,outcome) (rate(aomaoi_business_operation_outcomes_total[5m]))","legendFormat":"{{operation}} / {{outcome}}"}]},
+    {"id":3,"type":"timeseries","title":"Authentication and authorization rejections","gridPos":{"x":0,"y":8,"w":12,"h":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum by (kind) (rate(aomaoi_security_rejections_total[5m]))","legendFormat":"{{kind}}"}]},
+    {"id":4,"type":"stat","title":"Technical operation failures (last 1h)","gridPos":{"x":12,"y":8,"w":12,"h":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum(increase(aomaoi_business_operation_outcomes_total{outcome=\"technical_failure\"}[1h]))","legendFormat":"failures"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background"}}
+  ]
+}

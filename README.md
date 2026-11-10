@@ -39,13 +39,13 @@ README นี้อธิบายวิธีเปิดระบบในเ�
 
 Compose ของ backend เปิดระบบครบชุด: PostgreSQL, migration job ของ Liquibase, backend API และ frontend ซึ่ง build จาก repository frontend ที่อยู่ข้างกัน
 
-1. เปิด PowerShell หรือ terminal ในโฟลเดอร์ backend แล้วสร้างไฟล์ `.env` จากตัวอย่าง:
+1. เปิด PowerShell หรือ terminal ในโฟลเดอร์ backend แล้วสร้างไฟล์ `.env` จากตัวอย่าง หากยังไม่มีไฟล์นี้:
 
    ```powershell
-   Copy-Item .env.example .env
+   if (-not (Test-Path .env)) { Copy-Item .env.example .env }
    ```
 
-2. แก้ `.env` ก่อนเริ่ม โดยอย่างน้อยควรเปลี่ยน `DB_PASSWORD` และ `JWT_SECRET` ให้เป็นค่าที่คาดเดายากและไม่ซ้ำกับที่อื่น ค่า `JWT_SECRET` ต้องยาวอย่างน้อย 32 bytes สำหรับ HS256 อย่า commit หรือส่งไฟล์ `.env` ให้ผู้อื่น
+2. แก้ `.env` ก่อนเริ่ม โดยเปลี่ยน `DB_PASSWORD`, `JWT_SECRET` และ `GRAFANA_ADMIN_PASSWORD` จากค่า placeholder ให้เป็นค่าลับเฉพาะเครื่องและคาดเดายาก ค่า `JWT_SECRET` ต้องยาวอย่างน้อย 32 bytes สำหรับ HS256 อย่า commit หรือส่งไฟล์ `.env` ให้ผู้อื่น หากมี Grafana volume เดิม การเปลี่ยน `GRAFANA_ADMIN_PASSWORD` ใน `.env` จะไม่เปลี่ยนรหัสบัญชีที่ Grafana บันทึกไว้แล้ว
 
 3. สั่ง build และเปิดทั้งระบบ:
 
@@ -64,7 +64,10 @@ Compose ของ backend เปิดระบบครบชุด: PostgreSQL
 
 - Frontend: <http://localhost:3000>
 - Backend API: <http://localhost:8081>
-- Health check: <http://localhost:8081/actuator/health>
+- Health check: <http://localhost:8083/actuator/health> (Compose management port; bound to localhost)
+- Grafana: <http://localhost:3001>
+
+Grafana observability (Prometheus, Loki, Tempo, Alloy และ dashboard ที่ provision ไว้) จะเริ่มพร้อมระบบด้วยคำสั่งเดียวกัน ดูรายละเอียดที่ [observability/README.md](observability/README.md)
 - PostgreSQL จากเครื่อง host: `localhost:5434` (ค่าปริยาย)
 
 Liquibase migration และข้อมูลตัวอย่างทำงานใน service `migrate` ก่อน `app` ส่วน frontend เปิดพอร์ต `3000` และเรียก backend ที่พอร์ต `8081`
@@ -323,6 +326,10 @@ GitHub Actions ใน `.github/workflows/build.yml` รันทดสอบแ�
 | `E2E_SUPPORT_KEY` | กุญแจลับสำหรับเริ่มและ cleanup E2E run; ต้องสุ่มและยาวอย่างน้อย 32 ตัวอักษร |
 | `FRONTEND_PORT` | พอร์ต frontend บน host; ค่าเริ่มต้น 3000 |
 | `DB_POOL_MAX_SIZE`, `DB_POOL_MIN_IDLE` | ปรับขนาด Hikari connection pool |
+| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | บัญชี Grafana ที่ `http://localhost:3001`; ตั้งรหัสผ่านเฉพาะเครื่องก่อนเริ่ม และการเปลี่ยนรหัสผ่านไม่แก้บัญชีที่บันทึกใน Grafana volume แล้ว |
+| `TRACING_SAMPLING_PROBABILITY` | สัดส่วน request ที่เก็บ trace; `0.1` คือ 10%, `0` คือปิด; Compose ตั้งค่าเริ่มต้น 10% |
+
+ใน Compose ค่า `SPRING_DATASOURCE_*`, `SERVER_PORT`, และ OTLP endpoint ของแอปถูกกำหนดให้เหมาะกับเครือข่าย container โดยอัตโนมัติ ส่วน `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` ใช้ปรับปลายทาง OTLP เมื่อรันแอปนอก Compose
 
 ดูค่าตัวอย่างและคำอธิบายเพิ่มเติมใน [`.env.example`](.env.example) ไฟล์ `.env` จริงถูก ignore โดย Git และต้องไม่ commit
 

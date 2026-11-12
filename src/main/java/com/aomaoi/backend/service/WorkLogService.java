@@ -28,6 +28,9 @@ import java.util.List;
  */
 @Service
 public class WorkLogService {
+    /** เขตเวลาของธุรกิจ (ผู้ใช้อยู่ในไทย) - เซิร์ฟเวอร์/container อาจรันเป็น UTC จึงไม่ใช้ LocalDate.now() เฉยๆ */
+    private static final java.time.ZoneId BUSINESS_ZONE = java.time.ZoneId.of("Asia/Bangkok");
+
 
     private final WorkLogRepository workLogRepository;
     private final WorkerRepository workerRepository;
@@ -110,6 +113,7 @@ public class WorkLogService {
         // สำหรับงานวันเดียว (เช่น ตัดหญ้า, ตัดอ้อย, ฉีดยา): กำหนดให้ทั้ง start date และ end date เป็นวันเดียวกัน
         LocalDate start;
         LocalDate end;
+        boolean endDerivedFromDays = false;
 
         if (dto.getStartDate() != null && !dto.getStartDate().isBlank()) {
             start = parseDate(dto.getStartDate());
@@ -128,12 +132,20 @@ public class WorkLogService {
         } else if (dto.getDays() != null && "watering".equals(dto.getType())) {
             start = LocalDate.now();
             end = start.plusDays(Math.max(0, dto.getDays() - 1));
+            endDerivedFromDays = true;
         } else {
             throw new IllegalArgumentException("Date (or startDate and endDate) is required");
         }
 
         if (end.isBefore(start)) {
             throw new IllegalArgumentException("วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น");
+        }
+
+        // บันทึกงานย้อนหลังได้ แต่ห้ามบันทึกงานในวันที่ยังมาไม่ถึง
+        // (กรณีส่งแค่ days ระบบคำนวณ end เอง จึงเช็กเฉพาะวันเริ่มต้น)
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        if (start.isAfter(today) || (!endDerivedFromDays && end.isAfter(today))) {
+            throw new IllegalArgumentException("ไม่สามารถบันทึกงานในวันที่ยังไม่ถึงได้");
         }
 
         // ป้องกันไม่ให้มอบหมายงานประเภทเดียวกันให้คนงานคนเดิม 3 ครั้งในวันเดียวกัน

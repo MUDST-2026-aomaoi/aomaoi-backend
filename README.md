@@ -315,6 +315,17 @@ npm.cmd run cypress:run
 
 GitHub Actions ใน `.github/workflows/build.yml` รันทดสอบและตรวจ manifests, build backend image, ทดสอบ deployment บน kind ชั่วคราวและ smoke test แล้ว deploy ไปยัง cluster จริงเมื่อมีการตั้งค่า `KUBE_CONFIG` และตรงเงื่อนไข workflow การตั้งค่า Kubernetes แบบละเอียดและ secrets ที่จำเป็นอยู่ใน [`k8s/README.md`](k8s/README.md)
 
+### Deploy บน Render
+
+ทุก push หรือ merge เข้า `main` ที่ผ่าน job `test`, `build` และ `deploy-kind` จะถูก deploy ขึ้น Render อัตโนมัติด้วย job `deploy-render` โดยระบุ commit SHA ที่ผ่าน CI ให้ Render build
+
+1. Render service → Settings → **Deploy Hook**: คัดลอก URL แล้วเก็บเป็น GitHub secret `RENDER_DEPLOY_HOOK_URL` (ระดับ repo หรือ environment `production`)
+2. (ไม่บังคับ) สร้าง API key ที่ Render → Account Settings → API Keys แล้วเก็บเป็น secret `RENDER_API_KEY` เพื่อให้ job รอจน deploy เป็น `live` และ fail เมื่อ Render build หรือ health check ล้มเหลว
+3. Render service → Settings → **Auto-Deploy** ตั้งเป็น `Off` เพื่อไม่ให้ deploy commit ที่ยังไม่ผ่านเทส และไม่ deploy ซ้ำสองครั้ง
+4. ตั้ง **Health Check Path** เป็น `/actuator/health/readiness` และตั้ง environment variables อย่างน้อย `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `JWT_SECRET`, `BOOTSTRAP_ADMIN_PASSWORD`
+
+Render ไม่มี OTLP collector จึงปิด `OTLP_METRICS_EXPORT_ENABLED` ไว้ (ค่าเริ่มต้น) metrics ยังอ่านได้ที่ `/actuator/prometheus`
+
 ## การตั้งค่าสำคัญ
 
 | ตัวแปร | ใช้ทำอะไร |
@@ -328,6 +339,8 @@ GitHub Actions ใน `.github/workflows/build.yml` รันทดสอบแ�
 | `DB_POOL_MAX_SIZE`, `DB_POOL_MIN_IDLE` | ปรับขนาด Hikari connection pool |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | บัญชี Grafana ที่ `http://localhost:3001`; ตั้งรหัสผ่านเฉพาะเครื่องก่อนเริ่ม และการเปลี่ยนรหัสผ่านไม่แก้บัญชีที่บันทึกใน Grafana volume แล้ว |
 | `TRACING_SAMPLING_PROBABILITY` | สัดส่วน request ที่เก็บ trace; `0.1` คือ 10%, `0` คือปิด; Compose ตั้งค่าเริ่มต้น 10% |
+| `OTLP_METRICS_EXPORT_ENABLED`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | push metrics แบบ OTLP ไปยัง collector; ค่าเริ่มต้นปิด เพราะ Prometheus scrape `/actuator/prometheus` อยู่แล้ว เปิดเฉพาะเมื่อมี collector จริง |
+| `JAVA_TOOL_OPTIONS` | JVM options; image ตั้งค่าเริ่มต้น `-XX:TieredStopAtLevel=1` เพื่อให้ start เร็วขึ้นบนเครื่อง CPU น้อย (Kubernetes ใช้ค่าจาก ConfigMap แทน) |
 
 ใน Compose ค่า `SPRING_DATASOURCE_*`, `SERVER_PORT`, และ OTLP endpoint ของแอปถูกกำหนดให้เหมาะกับเครือข่าย container โดยอัตโนมัติ ส่วน `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` ใช้ปรับปลายทาง OTLP เมื่อรันแอปนอก Compose
 

@@ -45,7 +45,7 @@ Compose ของ backend เปิดระบบครบชุด: PostgreSQL
    if (-not (Test-Path .env)) { Copy-Item .env.example .env }
    ```
 
-2. แก้ `.env` ก่อนเริ่ม โดยเปลี่ยน `DB_PASSWORD`, `JWT_SECRET` และ `GRAFANA_ADMIN_PASSWORD` จากค่า placeholder ให้เป็นค่าลับเฉพาะเครื่องและคาดเดายาก ค่า `JWT_SECRET` ต้องยาวอย่างน้อย 32 bytes สำหรับ HS256 อย่า commit หรือส่งไฟล์ `.env` ให้ผู้อื่น หากมี Grafana volume เดิม การเปลี่ยน `GRAFANA_ADMIN_PASSWORD` ใน `.env` จะไม่เปลี่ยนรหัสบัญชีที่ Grafana บันทึกไว้แล้ว
+2. แก้ `.env` ก่อนเริ่ม โดยเปลี่ยน `DB_PASSWORD`, `JWT_SECRET` และ `GRAFANA_ADMIN_PASSWORD` จากค่า placeholder ให้เป็นค่าลับเฉพาะเครื่องและคาดเดายาก ต้องมีทั้ง `GRAFANA_ADMIN_USER` และ `GRAFANA_ADMIN_PASSWORD` ใน `.env` ค่า `JWT_SECRET` ต้องยาวอย่างน้อย 32 bytes สำหรับ HS256 อย่า commit หรือส่งไฟล์ `.env` ให้ผู้อื่น หากมี Grafana volume เดิม การเปลี่ยนชื่อหรือรหัสใน `.env` จะไม่เปลี่ยนบัญชีที่ Grafana บันทึกไว้แล้ว ดูวิธีรีเซ็ตรหัสใน [observability/README.md](observability/README.md)
 
 3. สั่ง build และเปิดทั้งระบบ:
 

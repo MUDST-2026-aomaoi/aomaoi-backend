@@ -26,13 +26,16 @@ Run these commands from `aomaoi-backend` in PowerShell:
 
 ```powershell
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-# Edit .env: replace DB_PASSWORD, JWT_SECRET, and GRAFANA_ADMIN_PASSWORD with
-# private values before first startup. Keep this file out of source control.
+# Edit .env: set GRAFANA_ADMIN_USER and replace DB_PASSWORD, JWT_SECRET, and
+# GRAFANA_ADMIN_PASSWORD with private values before first startup.
+# Keep this file out of source control.
 docker compose up --build -d
 docker compose ps
 ```
 
-The stack starts the usual app, database, migrations, and frontend as well as the monitoring services. The frontend remains at <http://localhost:3000>, the application API at <http://localhost:8081>, and Grafana at <http://localhost:3001>. Sign in using `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` from `.env` (default username is `admin`). Set a private password before first startup. Grafana persists its initial admin account in `grafana_data`; changing the environment variable later does not rotate an existing account password. Keep `.env` private and do not commit it.
+The stack starts the usual app, database, migrations, and frontend as well as the monitoring services. The frontend remains at <http://localhost:3000>, the application API at <http://localhost:8081>, and Grafana at <http://localhost:3001>. Compose requires `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` in `.env`; the example username is `admin`. Set a private password before first startup. Grafana persists its initial admin account in `grafana_data`; changing either value in `.env` later does not update that account. Keep `.env` private and do not commit it.
+
+To reset the password for an existing Grafana volume, run `docker compose exec grafana grafana cli admin reset-admin-password "new-private-password"` from `aomaoi-backend`, then set the same `GRAFANA_ADMIN_PASSWORD` in `.env`. Use Grafana's user settings to rename an existing admin account.
 
 Compose places management endpoints on a separate app port, published to the host only as `127.0.0.1:8083`. For local checks, use:
 

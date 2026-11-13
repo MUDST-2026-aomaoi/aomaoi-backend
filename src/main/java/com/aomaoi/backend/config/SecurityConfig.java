@@ -51,6 +51,8 @@ public class SecurityConfig implements WebMvcConfigurer {
                 .requestMatchers("/api/auth/login", "/error").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/test-support/e2e-readiness").permitAll()
                 .requestMatchers("/api/test-support/runs", "/api/test-support/runs/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/test-support/daily-summary/run",
+                        "/api/test-support/attendance/close-day").permitAll()
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                 // Prometheus is exposed only on the private management port (not published by Compose).
                 .requestMatchers(HttpMethod.GET, "/actuator/prometheus").permitAll()
@@ -76,6 +78,7 @@ public class SecurityConfig implements WebMvcConfigurer {
                 .requestMatchers(HttpMethod.PUT, "/api/workers/**").hasAnyRole("ADMIN", "SUPERADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/workers/**").hasAnyRole("ADMIN", "SUPERADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/work-logs").hasAnyRole("ADMIN", "SUPERADMIN")
+                .requestMatchers("/api/attendance", "/api/attendance/**").hasAnyRole("ADMIN", "SUPERADMIN")
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exceptions -> exceptions

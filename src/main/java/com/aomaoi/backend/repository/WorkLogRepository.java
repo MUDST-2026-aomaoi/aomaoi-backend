@@ -36,5 +36,20 @@ public interface WorkLogRepository extends JpaRepository<WorkLog, Long> {
             + "where w.worker.id in :workerIds group by w.type")
     List<Object[]> countsByTypeForWorkerIds(@Param("workerIds") Collection<Long> workerIds);
 
+    /**
+     * Wage per worker for logs recorded on {@code date} (work_date = start date), highest first.
+     * Rows: workerId, fullName, total wage, job count. Inactive workers are excluded.
+     */
+    @Query("select w.worker.id, w.worker.fullName, sum(w.total), count(w) from WorkLog w "
+            + "where w.worker.farmId = :farmId and w.worker.status <> 'inactive' and w.workDate = :date "
+            + "group by w.worker.id, w.worker.fullName "
+            + "order by sum(w.total) desc, count(w) desc, w.worker.fullName asc")
+    List<Object[]> dailyTotalsByWorker(@Param("farmId") Long farmId, @Param("date") LocalDate date);
+
+    /** Ids of workers of the farm that have a log whose date range covers {@code date}. */
+    @Query("select distinct w.worker.id from WorkLog w "
+            + "where w.worker.farmId = :farmId and w.startDate <= :date and w.endDate >= :date")
+    List<Long> workerIdsCoveringDate(@Param("farmId") Long farmId, @Param("date") LocalDate date);
+
     long countByWorkerIdAndTypeAndWorkDate(Long workerId, String type, LocalDate workDate);
 }

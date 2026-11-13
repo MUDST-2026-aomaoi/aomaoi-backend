@@ -75,7 +75,7 @@ class PostgreSqlMigrationIntegrationTest {
 
         assertEquals("7", scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = '"
                 + schema + "' AND table_name IN ('users', 'farm', 'worker', 'admin_profile', 'work_logs', 'audit_logs', 'salary_advances')"));
-        assertEquals("4", scalar("SELECT count(*) FROM databasechangelog"));
+        assertEquals("7", scalar("SELECT count(*) FROM databasechangelog"));
         assertEquals("10.50", scalar("SELECT total FROM work_logs"));
         assertEquals("5.00", scalar("SELECT amount FROM salary_advances"));
         assertEquals("bigint", scalar("SELECT data_type FROM information_schema.columns WHERE table_schema = '"
@@ -133,6 +133,124 @@ class PostgreSqlMigrationIntegrationTest {
     }
 
     @Test
+    void dailySummaryLogIsUniquePerAdminAndDayAndCascadesWithTheAdmin() throws Exception {
+        liquibase().update(SCHEMA_ONLY, new LabelExpression());
+        insertRecords();
+
+        assertEquals("character varying", scalar("SELECT data_type FROM information_schema.columns WHERE table_schema = '"
+                + schema + "' AND table_name = 'admin_profile' AND column_name = 'email'"));
+        long adminId = scalarLong("SELECT id FROM admin_profile LIMIT 1");
+        execute("INSERT INTO daily_summary_log(admin_id, summary_date, status) VALUES (" + adminId + ", DATE '2026-11-12', 'SENDING')");
+
+        assertSqlFailureAndRecover("INSERT INTO daily_summary_log(admin_id, summary_date, status) VALUES ("
+                + adminId + ", DATE '2026-11-12', 'SENDING')");
+        // ON CONFLICT DO NOTHING is what the scheduler relies on to let only one replica send
+        assertEquals("0", scalar("WITH ins AS (INSERT INTO daily_summary_log(admin_id, summary_date, status) VALUES ("
+                + adminId + ", DATE '2026-11-12', 'SENDING') ON CONFLICT (admin_id, summary_date) DO NOTHING RETURNING 1) "
+                + "SELECT count(*) FROM ins"));
+        assertSqlFailureAndRecover("INSERT INTO daily_summary_log(admin_id, summary_date, status) VALUES ("
+                + adminId + ", DATE '2026-11-13', 'DONE')");
+
+        execute("DELETE FROM admin_profile WHERE id = " + adminId);
+        assertEquals("0", scalar("SELECT count(*) FROM daily_summary_log"));
+    }
+
+    @Test
+    void attendanceIsUniquePerWorkerAndDayRestrictedToKnownStatusesAndLocksTheWorkersFarm() throws Exception {
+        liquibase().update(SCHEMA_ONLY, new LabelExpression());
+        insertRecords();
+        long secondFarmId = scalarLong("INSERT INTO farm(name,location) VALUES ('Second farm','test') RETURNING id");
+        long freshWorker = scalarLong("INSERT INTO worker(full_name,nickname,farm_id,status) "
+                + "VALUES ('Fresh','fresh',1,'active') RETURNING id");
+
+        execute("INSERT INTO attendance(worker_id, attendance_date, status, recorded_by) "
+                + "VALUES (" + freshWorker + ", DATE '2026-11-12', 'PRESENT', 'admin')");
+        assertSqlFailureAndRecover("INSERT INTO attendance(worker_id, attendance_date, status, recorded_by) "
+                + "VALUES (" + freshWorker + ", DATE '2026-11-12', 'ABSENT', 'admin')");
+        assertSqlFailureAndRecover("INSERT INTO attendance(worker_id, attendance_date, status, recorded_by) "
+                + "VALUES (" + freshWorker + ", DATE '2026-11-13', 'HOLIDAY', 'admin')");
+        assertSqlFailureAndRecover("INSERT INTO attendance(worker_id, attendance_date, status, recorded_by) "
+                + "VALUES (9999, DATE '2026-11-13', 'PRESENT', 'admin')");
+        // history belongs to the farm where it was recorded
+        assertSqlFailureAndRecover("UPDATE worker SET farm_id = " + secondFarmId + " WHERE id = " + freshWorker);
+        // a worker with attendance cannot be deleted either (history is kept)
+        assertSqlFailureAndRecover("DELETE FROM worker WHERE id = " + freshWorker);
+    }
+
+    @Test
+    void closeDayRecordsUncheckedWorkersAndLeavesDaysOffAlone() throws Exception {
+        liquibase().update(SCHEMA_ONLY, new LabelExpression());
+        execute("INSERT INTO farm(name) VALUES ('Test farm'), ('Quiet farm')");
+        long checked = worker("Checked", 1, "active", "2026-01-01");
+        long worked = worker("Worked", 1, "active", "2026-01-01");
+        long idle = worker("Idle", 1, "pending", "2026-01-01");
+        long inactive = worker("Inactive", 1, "inactive", "2026-01-01");
+        long joinedLater = worker("Later", 1, "active", "2026-11-20");
+        // farm 2: nobody checked and nothing logged -> a day off
+        long quiet = worker("Quiet", 2, "active", "2026-01-01");
+
+        execute("INSERT INTO attendance(worker_id, attendance_date, status, note, recorded_by) VALUES ("
+                + checked + ", DATE '2026-11-12', 'LEAVE', 'sick', 'admin')");
+        // a multi-day watering log covers the day even though it started earlier
+        execute("INSERT INTO work_logs(worker_id, type, work_date, start_date, end_date, total) VALUES ("
+                + worked + ", 'watering', DATE '2026-11-10', DATE '2026-11-10', DATE '2026-11-13', 100)");
+
+        var service = closeDayService();
+        assertEquals(2, service.closeAllFarms(java.time.LocalDate.of(2026, 11, 12)));
+
+        assertEquals("LEAVE", status(checked), "an Admin's choice is never overwritten");
+        assertEquals("PRESENT", status(worked));
+        assertEquals("ABSENT", status(idle));
+        assertEquals("0", scalar("SELECT count(*) FROM attendance WHERE worker_id IN ("
+                + inactive + "," + joinedLater + "," + quiet + ")"));
+        assertEquals("t", scalar("SELECT auto_recorded FROM attendance WHERE worker_id = " + idle));
+        assertEquals("system", scalar("SELECT recorded_by FROM attendance WHERE worker_id = " + idle));
+        assertEquals("f", scalar("SELECT auto_recorded FROM attendance WHERE worker_id = " + checked));
+
+        // running it again (another replica, a later 15-minute tick) adds nothing
+        assertEquals(0, service.closeAllFarms(java.time.LocalDate.of(2026, 11, 12)));
+        assertEquals("3", scalar("SELECT count(*) FROM attendance"));
+    }
+
+    @Test
+    void leaveRegisteredInAdvanceDoesNotTurnADayOffIntoAWorkingDay() throws Exception {
+        liquibase().update(SCHEMA_ONLY, new LabelExpression());
+        execute("INSERT INTO farm(name) VALUES ('Test farm')");
+        long planned = worker("Planned", 1, "active", "2026-01-01");
+        worker("Other", 1, "active", "2026-01-01");
+        execute("INSERT INTO attendance(worker_id, attendance_date, status, note, recorded_by) VALUES ("
+                + planned + ", DATE '2026-11-12', 'LEAVE', 'ลาล่วงหน้า', 'admin')");
+
+        // only a leave and no work log: still a day off, nobody is marked absent
+        assertEquals(0, closeDayService().closeAllFarms(java.time.LocalDate.of(2026, 11, 12)));
+        assertEquals("1", scalar("SELECT count(*) FROM attendance"));
+    }
+
+    @Test
+    void closeDaySkipsWorkersOwnedByAnE2eRun() throws Exception {
+        liquibase().update(SCHEMA_ONLY, new LabelExpression());
+        execute("INSERT INTO farm(name) VALUES ('Test farm')");
+        long regular = worker("Regular", 1, "active", "2026-01-01");
+        // an E2E run owns its own farm and workers; its triggers tag rows from the session setting
+        execute("INSERT INTO e2e_runs(id, token_hash, expires_at) VALUES ('run-1', 'hash', now() + interval '1 hour')");
+        execute("SELECT set_config('aomaoi.e2e_run', 'run-1', false)");
+        long ownedFarm = scalarLong("INSERT INTO farm(name) VALUES ('E2E farm') RETURNING id");
+        long owned = worker("Owned", ownedFarm, "active", "2026-01-01");
+        execute("SELECT set_config('aomaoi.e2e_run', '', false)");
+        execute("INSERT INTO work_logs(worker_id, type, work_date, start_date, end_date, total) VALUES ("
+                + regular + ", 'cutting', DATE '2026-11-12', DATE '2026-11-12', DATE '2026-11-12', 10)");
+
+        execute("SELECT set_config('aomaoi.e2e_run', 'run-1', false)");
+        execute("INSERT INTO work_logs(worker_id, type, work_date, start_date, end_date, total) VALUES ("
+                + owned + ", 'cutting', DATE '2026-11-12', DATE '2026-11-12', DATE '2026-11-12', 10)");
+        execute("SELECT set_config('aomaoi.e2e_run', '', false)");
+
+        // only the regular farm is closed; the E2E farm's worker is left to its own run
+        assertEquals(1, closeDayService().closeAllFarms(java.time.LocalDate.of(2026, 11, 12)));
+        assertEquals("0", scalar("SELECT count(*) FROM attendance WHERE worker_id = " + owned));
+    }
+
+    @Test
     void demoContextSeedsExpectedAccountsAndFarms() throws Exception {
         liquibase().update(new Contexts("demo"), new LabelExpression());
 
@@ -166,7 +284,7 @@ class PostgreSqlMigrationIntegrationTest {
         Liquibase liquibase = liquibase();
         liquibase.update(SCHEMA_ONLY, new LabelExpression());
         insertRecords();
-        liquibase.rollback(4, SCHEMA_ONLY, new LabelExpression());
+        liquibase.rollback(7, SCHEMA_ONLY, new LabelExpression());
 
         assertEquals("0", scalar("SELECT count(*) FROM databasechangelog"));
         assertEquals("0", scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = '"
@@ -478,6 +596,24 @@ class PostgreSqlMigrationIntegrationTest {
         // This test owns the connection so teardown can remove the disposable schema.
         return new Liquibase("db/changelog/db.changelog-master.yaml",
                 new ClassLoaderResourceAccessor(), database);
+    }
+
+    private long worker(String name, long farmId, String status, String joined) throws SQLException {
+        return scalarLong("INSERT INTO worker(full_name, nickname, farm_id, status, joined_date) VALUES ('" + name
+                + "', '" + name + "', " + farmId + ", '" + status + "', DATE '" + joined + "') RETURNING id");
+    }
+
+    private String status(long workerId) throws SQLException {
+        return scalar("SELECT status FROM attendance WHERE worker_id = " + workerId
+                + " AND attendance_date = DATE '2026-11-12'");
+    }
+
+    private com.aomaoi.backend.service.AttendanceCloseDayService closeDayService() {
+        var jdbc = new org.springframework.jdbc.core.JdbcTemplate(
+                new org.springframework.jdbc.datasource.SingleConnectionDataSource(connection, true));
+        return new com.aomaoi.backend.service.AttendanceCloseDayService(jdbc,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+                org.mockito.Mockito.mock(com.aomaoi.backend.service.AuditLogService.class));
     }
 
     private void insertRecords() throws SQLException {

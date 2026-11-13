@@ -24,6 +24,7 @@ public interface WorkerRepository extends JpaRepository<Worker, Long> {
     @EntityGraph(attributePaths = "user")
     java.util.Optional<Worker> findByUserUsername(String username);
     long countByFarmIdAndStatusNot(Long farmId, String status);
+    List<Worker> findByFarmIdAndStatusNot(Long farmId, String status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select w from Worker w where w.id = :id")

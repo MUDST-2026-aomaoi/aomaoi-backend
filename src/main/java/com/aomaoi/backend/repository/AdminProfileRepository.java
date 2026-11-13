@@ -13,6 +13,7 @@ public interface AdminProfileRepository extends JpaRepository<AdminProfile, Long
     @EntityGraph(attributePaths = "user")
     Optional<AdminProfile> findByUserUsername(String username);
     long countByFarmIdAndStatusNot(Long farmId, String status);
+    List<AdminProfile> findByStatusAndEmailIsNotNullAndFarmIdIsNotNull(String status);
 
     @Override
     @EntityGraph(attributePaths = "user")

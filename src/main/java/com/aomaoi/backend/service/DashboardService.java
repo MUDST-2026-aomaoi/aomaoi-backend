@@ -42,8 +42,8 @@ public class DashboardService {
         );
 
         // This month's work logs
-        LocalDate startOfMonth = LocalDate.now().withDayOfMonth(1);
-        LocalDate today = LocalDate.now();
+        LocalDate startOfMonth = com.aomaoi.backend.config.BusinessTime.today().withDayOfMonth(1);
+        LocalDate today = com.aomaoi.backend.config.BusinessTime.today();
         List<WorkLog> monthLogs = workLogRepository.findByWorkDateBetween(startOfMonth, today);
 
         dto.setTotalThisMonth(

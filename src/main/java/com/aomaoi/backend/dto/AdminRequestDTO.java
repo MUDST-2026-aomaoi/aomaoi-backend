@@ -1,6 +1,7 @@
 package com.aomaoi.backend.dto;
 
 import lombok.Data;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotBlank;
@@ -17,6 +18,8 @@ public class AdminRequestDTO {
     @Size(max = 255)
     private String username;
     private String phone;
+    @Email @Size(max = 255)
+    private String email;
     @NotBlank(groups = Create.class)
     @Size(min = 6, message = "Temporary password must be at least 6 characters", groups = Create.class)
     private String tempPassword;

@@ -55,7 +55,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             farm.setName("ไร่อ้อยอุดมทรัพย์ (Udomsap Sugarcane Farm)");
             farm.setLocation("กาญจนบุรี (Kanchanaburi)");
             farm.setStatus("active");
-            farm.setJoinedDate(java.time.LocalDate.now().minusMonths(3));
+            farm.setJoinedDate(BusinessTime.today().minusMonths(3));
             farm = farmRepository.save(farm);
         } else {
             farm = farmRepository.findAll().get(0);
@@ -78,7 +78,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             adminProfile.setPhone("0812345678");
             adminProfile.setFarmId(farm.getId());
             adminProfile.setStatus("active");
-            adminProfile.setJoinedDate(java.time.LocalDate.now().minusMonths(3));
+            adminProfile.setJoinedDate(BusinessTime.today().minusMonths(3));
             adminProfileRepository.save(adminProfile);
         }
 
@@ -101,7 +101,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             worker1.setPhone("0891112222");
             worker1.setFarmId(farm.getId());
             worker1.setStatus("active");
-            worker1.setJoinedDate(java.time.LocalDate.now().minusMonths(2));
+            worker1.setJoinedDate(BusinessTime.today().minusMonths(2));
             worker1 = workerRepository.save(worker1);
         }
 
@@ -124,11 +124,11 @@ public class DatabaseSeeder implements CommandLineRunner {
             worker2.setPhone("0893334444");
             worker2.setFarmId(farm.getId());
             worker2.setStatus("active");
-            worker2.setJoinedDate(java.time.LocalDate.now().minusMonths(2));
+            worker2.setJoinedDate(BusinessTime.today().minusMonths(2));
             worker2 = workerRepository.save(worker2);
         }
 
-        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate today = BusinessTime.today();
 
         // 6. Record all four task types if workLogRepository is empty
         if (workLogRepository.count() == 0) {

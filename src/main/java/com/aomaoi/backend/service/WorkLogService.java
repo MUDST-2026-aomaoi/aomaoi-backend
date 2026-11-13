@@ -28,9 +28,6 @@ import java.util.List;
  */
 @Service
 public class WorkLogService {
-    /** เขตเวลาของธุรกิจ (ผู้ใช้อยู่ในไทย) - เซิร์ฟเวอร์/container อาจรันเป็น UTC จึงไม่ใช้ LocalDate.now() เฉยๆ */
-    private static final java.time.ZoneId BUSINESS_ZONE = java.time.ZoneId.of("Asia/Bangkok");
-
 
     private final WorkLogRepository workLogRepository;
     private final WorkerRepository workerRepository;
@@ -130,7 +127,7 @@ public class WorkLogService {
                 end = start;
             }
         } else if (dto.getDays() != null && "watering".equals(dto.getType())) {
-            start = LocalDate.now();
+            start = com.aomaoi.backend.config.BusinessTime.today();
             end = start.plusDays(Math.max(0, dto.getDays() - 1));
             endDerivedFromDays = true;
         } else {
@@ -143,7 +140,7 @@ public class WorkLogService {
 
         // บันทึกงานย้อนหลังได้ แต่ห้ามบันทึกงานในวันที่ยังมาไม่ถึง
         // (กรณีส่งแค่ days ระบบคำนวณ end เอง จึงเช็กเฉพาะวันเริ่มต้น)
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(com.aomaoi.backend.config.BusinessTime.ZONE);
         if (start.isAfter(today) || (!endDerivedFromDays && end.isAfter(today))) {
             throw new IllegalArgumentException("ไม่สามารถบันทึกงานในวันที่ยังไม่ถึงได้");
         }

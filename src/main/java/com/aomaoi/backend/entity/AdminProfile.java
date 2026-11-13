@@ -15,6 +15,8 @@ public class AdminProfile {
 
     private String fullName;
     private String phone;
+    /** Address that receives the end-of-day summary (optional). */
+    private String email;
     private Long farmId;
     @Column(columnDefinition = "TEXT")
     private String avatar;
@@ -34,7 +36,7 @@ public class AdminProfile {
     @PrePersist
     protected void onCreate() {
         if (joinedDate == null) {
-            joinedDate = LocalDate.now();
+            joinedDate = com.aomaoi.backend.config.BusinessTime.today();
         }
     }
 }

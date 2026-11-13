@@ -44,6 +44,24 @@ kubectl -n aomaoi-app get secret aomaoi-secrets -o jsonpath='{.data.bootstrap-ad
 
 Database credentials are generated once in `aomaoi-postgres-db`; JWT and bootstrap credentials are stored in `aomaoi-secrets`. Redeploys preserve both Secrets. Use separate namespaces/clusters for development and production. PostgreSQL requires a default StorageClass that supports a 5Gi ReadWriteOnce PVC. Back up the database before maintenance; changing Secret values does not rotate credentials in an initialized database.
 
+## อีเมลสรุปประจำวันถึง Admin (ไม่บังคับ)
+
+ปิดอยู่เป็นค่าเริ่มต้น (`DAILY_SUMMARY_ENABLED: "false"` ใน `k8s/data/configmap.yaml`) เปิดใช้เมื่อมี SMTP server:
+
+```bash
+# ค่าที่ไม่ลับ: เพิ่มใน ConfigMap aomaoi-backend-config
+#   DAILY_SUMMARY_ENABLED: "true"
+#   MAIL_FROM: no-reply@example.com
+#   SMTP_HOST: smtp.example.com
+#   SMTP_PORT: "587"
+#   SMTP_AUTH: "true"
+#   SMTP_STARTTLS: "true"
+#   SMTP_USERNAME: apikey-or-user
+kubectl -n aomaoi-app create secret generic aomaoi-smtp --from-literal=password='<smtp password>'
+```
+
+Deployment มี 2 replicas แต่ส่งซ้ำไม่ได้: ตาราง `daily_summary_log` (unique ต่อ admin ต่อวัน) ใช้จองสิทธิ์ส่ง รายละเอียดดู `docs/daily-summary-email.md`
+
 ## CI/CD (`.github/workflows/build.yml`)
 
 | job | ทำอะไร | เมื่อไหร่ |

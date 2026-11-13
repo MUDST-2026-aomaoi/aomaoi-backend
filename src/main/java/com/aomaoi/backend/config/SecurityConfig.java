@@ -51,6 +51,7 @@ public class SecurityConfig implements WebMvcConfigurer {
                 .requestMatchers("/api/auth/login", "/error").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/test-support/e2e-readiness").permitAll()
                 .requestMatchers("/api/test-support/runs", "/api/test-support/runs/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/test-support/daily-summary/run").permitAll()
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                 // Prometheus is exposed only on the private management port (not published by Compose).
                 .requestMatchers(HttpMethod.GET, "/actuator/prometheus").permitAll()

@@ -17,3 +17,6 @@ data:
   JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=65.0"
   LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: INFO
   SPRING_JPA_SHOW_SQL: "false"
+  # End-of-day summary e-mail. Disabled until an SMTP server is configured (see k8s/README.md).
+  DAILY_SUMMARY_ENABLED: "false"
+  APP_BUSINESS_ZONE: Asia/Bangkok

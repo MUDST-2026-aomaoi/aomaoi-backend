@@ -75,7 +75,7 @@ class PostgreSqlMigrationIntegrationTest {
 
         assertEquals("7", scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = '"
                 + schema + "' AND table_name IN ('users', 'farm', 'worker', 'admin_profile', 'work_logs', 'audit_logs', 'salary_advances')"));
-        assertEquals("4", scalar("SELECT count(*) FROM databasechangelog"));
+        assertEquals("6", scalar("SELECT count(*) FROM databasechangelog"));
         assertEquals("10.50", scalar("SELECT total FROM work_logs"));
         assertEquals("5.00", scalar("SELECT amount FROM salary_advances"));
         assertEquals("bigint", scalar("SELECT data_type FROM information_schema.columns WHERE table_schema = '"
@@ -133,6 +133,29 @@ class PostgreSqlMigrationIntegrationTest {
     }
 
     @Test
+    void dailySummaryLogIsUniquePerAdminAndDayAndCascadesWithTheAdmin() throws Exception {
+        liquibase().update(SCHEMA_ONLY, new LabelExpression());
+        insertRecords();
+
+        assertEquals("character varying", scalar("SELECT data_type FROM information_schema.columns WHERE table_schema = '"
+                + schema + "' AND table_name = 'admin_profile' AND column_name = 'email'"));
+        long adminId = scalarLong("SELECT id FROM admin_profile LIMIT 1");
+        execute("INSERT INTO daily_summary_log(admin_id, summary_date, status) VALUES (" + adminId + ", DATE '2026-11-12', 'SENDING')");
+
+        assertSqlFailureAndRecover("INSERT INTO daily_summary_log(admin_id, summary_date, status) VALUES ("
+                + adminId + ", DATE '2026-11-12', 'SENDING')");
+        // ON CONFLICT DO NOTHING is what the scheduler relies on to let only one replica send
+        assertEquals("0", scalar("WITH ins AS (INSERT INTO daily_summary_log(admin_id, summary_date, status) VALUES ("
+                + adminId + ", DATE '2026-11-12', 'SENDING') ON CONFLICT (admin_id, summary_date) DO NOTHING RETURNING 1) "
+                + "SELECT count(*) FROM ins"));
+        assertSqlFailureAndRecover("INSERT INTO daily_summary_log(admin_id, summary_date, status) VALUES ("
+                + adminId + ", DATE '2026-11-13', 'DONE')");
+
+        execute("DELETE FROM admin_profile WHERE id = " + adminId);
+        assertEquals("0", scalar("SELECT count(*) FROM daily_summary_log"));
+    }
+
+    @Test
     void demoContextSeedsExpectedAccountsAndFarms() throws Exception {
         liquibase().update(new Contexts("demo"), new LabelExpression());
 
@@ -166,7 +189,7 @@ class PostgreSqlMigrationIntegrationTest {
         Liquibase liquibase = liquibase();
         liquibase.update(SCHEMA_ONLY, new LabelExpression());
         insertRecords();
-        liquibase.rollback(4, SCHEMA_ONLY, new LabelExpression());
+        liquibase.rollback(6, SCHEMA_ONLY, new LabelExpression());
 
         assertEquals("0", scalar("SELECT count(*) FROM databasechangelog"));
         assertEquals("0", scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = '"

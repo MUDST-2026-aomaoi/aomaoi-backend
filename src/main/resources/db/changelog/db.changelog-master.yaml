@@ -11,3 +11,7 @@ databaseChangeLog:
       file: db/changelog/changes/005-salary-advances.sql
   - include:
       file: db/changelog/changes/006-lock-worker-farm-after-financial-activity.sql
+  - include:
+      file: db/changelog/changes/007-admin-email.sql
+  - include:
+      file: db/changelog/changes/008-daily-summary-log.sql

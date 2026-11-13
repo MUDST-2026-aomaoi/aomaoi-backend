@@ -49,6 +49,7 @@ public class AdminProfileService {
         AdminProfile admin = new AdminProfile();
         admin.setFullName(dto.getFullName());
         admin.setPhone(dto.getPhone());
+        admin.setEmail(normalizeEmail(dto.getEmail()));
         admin.setFarmId(dto.getFarmId());
         admin.setAvatar(dto.getAvatar());
         admin.setStatus("pending");
@@ -66,6 +67,7 @@ public class AdminProfileService {
         AdminProfile admin = getAdminById(id);
         admin.setFullName(dto.getFullName());
         admin.setPhone(dto.getPhone());
+        admin.setEmail(normalizeEmail(dto.getEmail()));
         if (dto.getFarmId() != null) {
             requireFarm(dto.getFarmId());
             admin.setFarmId(dto.getFarmId());
@@ -96,6 +98,10 @@ public class AdminProfileService {
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         String currentUsername = auth != null ? auth.getName() : "system";
         auditLogService.logAction("DELETE_ADMIN", currentUsername, admin.getUser().getUsername(), "Deactivated admin account");
+    }
+
+    private static String normalizeEmail(String email) {
+        return email == null || email.isBlank() ? null : email.trim().toLowerCase();
     }
 
     private com.aomaoi.backend.entity.Farm requireFarm(Long farmId) {

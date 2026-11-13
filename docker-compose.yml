@@ -28,6 +28,13 @@ services:
     volumes:
       - app_logs:/var/log/aomaoi
 
+  # Local mail catcher for the daily summary e-mail: SMTP on mailpit:1025, inbox UI on localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "127.0.0.1:8025:8025"
+    restart: unless-stopped
+
   postgres:
     image: postgres:15-alpine
     ports:

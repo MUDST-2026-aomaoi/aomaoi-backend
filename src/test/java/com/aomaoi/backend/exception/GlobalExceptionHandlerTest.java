@@ -127,4 +127,17 @@ class GlobalExceptionHandlerTest {
         assertNotNull(response.getBody());
         assertEquals("Invalid request", response.getBody().get("message"));
     }
+
+    @Test
+    void handleMalformedRequest() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+        org.springframework.http.converter.HttpMessageNotReadableException ex =
+                mock(org.springframework.http.converter.HttpMessageNotReadableException.class);
+
+        ResponseEntity<Map<String, String>> response = handler.handleMalformedRequest(ex);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Invalid request body", response.getBody().get("message"));
+    }
 }

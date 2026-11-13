@@ -11,7 +11,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 
-/** Renders the summary (Thai). All names are HTML-escaped in the HTML body. */
+/** Renders the summary (Thai). All names and notes are HTML-escaped in the HTML body. */
 @Component
 public class SummaryEmailBuilder {
 
@@ -28,32 +28,37 @@ public class SummaryEmailBuilder {
                 ? "ไม่มีการบันทึกงานในวันนี้"
                 : s.topWorker().name() + " - ค่าแรง " + money(s.topWorker().totalWage()) + " บาท ("
                         + s.topWorker().jobCount() + " รายการ)";
-        String absent = s.absentWorkerNames().isEmpty()
-                ? "ไม่มี (ทุกคนมีบันทึกงาน)"
-                : String.join(", ", s.absentWorkerNames());
+        List<String> leaveLines = s.leaveWorkers().stream()
+                .map(l -> l.note() == null || l.note().isBlank() ? l.name() : l.name() + " (" + l.note() + ")")
+                .toList();
+        String absentText = s.absentWorkerNames().isEmpty() ? "ไม่มี" : String.join(", ", s.absentWorkerNames());
+        String leaveText = leaveLines.isEmpty() ? "ไม่มี" : String.join(", ", leaveLines);
 
         String text = "สรุปงานประจำวัน " + date + "\n"
                 + "ฟาร์ม: " + s.farmName() + "\n\n"
                 + "คนงานเด่นของวัน: " + top + "\n"
-                + "คนงานที่ไม่มีบันทึกงาน (" + s.absentWorkerNames().size() + " จาก " + s.activeWorkerCount()
-                + " คน): " + absent + "\n"
+                + "มาทำงาน: " + s.presentCount() + " จาก " + s.checkedWorkerCount() + " คน\n"
+                + "ขาด (" + s.absentWorkerNames().size() + " คน): " + absentText + "\n"
+                + "ลา (" + s.leaveWorkers().size() + " คน): " + leaveText + "\n"
                 + "ค่าแรงรวมของวัน: " + money(s.totalWage()) + " บาท\n";
 
         String html = "<div style=\"font-family:sans-serif;line-height:1.5\">"
                 + "<h2 style=\"margin:0 0 4px\">สรุปงานประจำวัน " + esc(date) + "</h2>"
                 + "<p style=\"margin:0 0 16px;color:#555\">ฟาร์ม: " + esc(s.farmName()) + "</p>"
                 + "<p><strong>คนงานเด่นของวัน:</strong> " + esc(top) + "</p>"
-                + "<p><strong>คนงานที่ไม่มีบันทึกงาน (" + s.absentWorkerNames().size() + " จาก "
-                + s.activeWorkerCount() + " คน):</strong> "
-                + (s.absentWorkerNames().isEmpty() ? esc(absent) : listItems(s.absentWorkerNames())) + "</p>"
+                + "<p><strong>มาทำงาน:</strong> " + s.presentCount() + " จาก " + s.checkedWorkerCount() + " คน</p>"
+                + "<div><strong>ขาด (" + s.absentWorkerNames().size() + " คน):</strong> "
+                + (s.absentWorkerNames().isEmpty() ? esc(absentText) : listItems(s.absentWorkerNames())) + "</div>"
+                + "<div><strong>ลา (" + s.leaveWorkers().size() + " คน):</strong> "
+                + (leaveLines.isEmpty() ? esc(leaveText) : listItems(leaveLines)) + "</div>"
                 + "<p><strong>ค่าแรงรวมของวัน:</strong> " + esc(money(s.totalWage())) + " บาท</p>"
                 + "</div>";
         return new SummaryEmail(subject, text, html);
     }
 
-    private static String listItems(List<String> names) {
+    private static String listItems(List<String> items) {
         StringBuilder sb = new StringBuilder("<ul style=\"margin:4px 0\">");
-        names.forEach(name -> sb.append("<li>").append(esc(name)).append("</li>"));
+        items.forEach(item -> sb.append("<li>").append(esc(item)).append("</li>"));
         return sb.append("</ul>").toString();
     }
 

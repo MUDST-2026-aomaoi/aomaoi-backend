@@ -15,3 +15,5 @@ databaseChangeLog:
       file: db/changelog/changes/007-admin-email.sql
   - include:
       file: db/changelog/changes/008-daily-summary-log.sql
+  - include:
+      file: db/changelog/changes/009-attendance.sql

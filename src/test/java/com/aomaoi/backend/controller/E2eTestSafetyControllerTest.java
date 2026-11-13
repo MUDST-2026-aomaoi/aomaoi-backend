@@ -2,6 +2,8 @@ package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.entity.AdminProfile;
 import com.aomaoi.backend.repository.AdminProfileRepository;
+import com.aomaoi.backend.service.AttendanceCloseDayService;
+import com.aomaoi.backend.service.AttendanceService;
 import com.aomaoi.backend.service.E2eRunService;
 import com.aomaoi.backend.summary.DailySummaryScheduler;
 import org.junit.jupiter.api.Test;
@@ -22,7 +24,8 @@ class E2eTestSafetyControllerTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-12T11:00:00Z"), ZoneId.of("Asia/Bangkok"));
 
     private static E2eTestSafetyController controllerFor(E2eRunService service) {
-        return new E2eTestSafetyController(service, mock(DailySummaryScheduler.class), mock(AdminProfileRepository.class), CLOCK);
+        return new E2eTestSafetyController(service, mock(DailySummaryScheduler.class), mock(AdminProfileRepository.class), CLOCK,
+                mock(AttendanceCloseDayService.class), mock(AttendanceService.class));
     }
 
     @Test
@@ -33,6 +36,7 @@ class E2eTestSafetyControllerTest {
         when(service.enabled()).thenReturn(true);
         assertEquals(true, controller.readiness().get("safeForE2e"));
         assertEquals("shared-tracked", controller.readiness().get("mode"));
+        assertEquals(false, controller.readiness().get("attendanceOpen"), "a mock reports closed");
     }
 
     @Test
@@ -82,7 +86,7 @@ class E2eTestSafetyControllerTest {
         admin.setId(7L);
         when(admins.findById(7L)).thenReturn(Optional.of(admin));
         when(scheduler.sendTo(admin, LocalDate.of(2026, 11, 1))).thenReturn(DailySummaryScheduler.Outcome.SENT);
-        var controller = new E2eTestSafetyController(service, scheduler, admins, CLOCK);
+        var controller = new E2eTestSafetyController(service, scheduler, admins, CLOCK, mock(AttendanceCloseDayService.class), mock(AttendanceService.class));
 
         var result = controller.runDailySummary("test-key", 7L, LocalDate.of(2026, 11, 1));
 
@@ -99,7 +103,7 @@ class E2eTestSafetyControllerTest {
         var admin = new AdminProfile();
         when(admins.findById(7L)).thenReturn(Optional.of(admin));
         when(scheduler.sendTo(admin, LocalDate.of(2026, 11, 12))).thenReturn(DailySummaryScheduler.Outcome.ALREADY_HANDLED);
-        var controller = new E2eTestSafetyController(service, scheduler, admins, CLOCK);
+        var controller = new E2eTestSafetyController(service, scheduler, admins, CLOCK, mock(AttendanceCloseDayService.class), mock(AttendanceService.class));
 
         assertEquals("ALREADY_HANDLED", controller.runDailySummary("test-key", 7L, null).get("outcome"));
     }
@@ -110,7 +114,7 @@ class E2eTestSafetyControllerTest {
         var scheduler = mock(DailySummaryScheduler.class);
         var admins = mock(AdminProfileRepository.class);
         doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN)).when(service).authorize("bad");
-        var controller = new E2eTestSafetyController(service, scheduler, admins, CLOCK);
+        var controller = new E2eTestSafetyController(service, scheduler, admins, CLOCK, mock(AttendanceCloseDayService.class), mock(AttendanceService.class));
 
         assertThrows(ResponseStatusException.class, () -> controller.runDailySummary("bad", 7L, null));
         verifyNoInteractions(scheduler, admins);
@@ -121,9 +125,35 @@ class E2eTestSafetyControllerTest {
         var service = mock(E2eRunService.class);
         var admins = mock(AdminProfileRepository.class);
         when(admins.findById(9L)).thenReturn(Optional.empty());
-        var controller = new E2eTestSafetyController(service, mock(DailySummaryScheduler.class), admins, CLOCK);
+        var controller = new E2eTestSafetyController(service, mock(DailySummaryScheduler.class), admins, CLOCK, mock(AttendanceCloseDayService.class), mock(AttendanceService.class));
 
         var error = assertThrows(ResponseStatusException.class, () -> controller.runDailySummary("k", 9L, null));
         assertEquals(404, error.getStatusCode().value());
+    }
+
+    @Test
+    void closeDay_requiresTheSupportKeyAndClosesOneFarmOnTheGivenDate() {
+        var service = mock(E2eRunService.class);
+        var closeDay = mock(AttendanceCloseDayService.class);
+        when(closeDay.closeFarm(3L, LocalDate.of(2026, 11, 1))).thenReturn(4);
+        var controller = new E2eTestSafetyController(service, mock(DailySummaryScheduler.class),
+                mock(AdminProfileRepository.class), CLOCK, closeDay, mock(AttendanceService.class));
+
+        assertEquals(4, controller.closeDay("test-key", 3L, LocalDate.of(2026, 11, 1)).get("created"));
+        verify(service).authorize("test-key");
+    }
+
+    @Test
+    void closeDay_defaultsToTodayInBangkokAndRejectsAnInvalidKey() {
+        var service = mock(E2eRunService.class);
+        var closeDay = mock(AttendanceCloseDayService.class);
+        when(closeDay.closeFarm(3L, LocalDate.of(2026, 11, 12))).thenReturn(0);
+        var controller = new E2eTestSafetyController(service, mock(DailySummaryScheduler.class),
+                mock(AdminProfileRepository.class), CLOCK, closeDay, mock(AttendanceService.class));
+        assertEquals(0, controller.closeDay("k", 3L, null).get("created"));
+
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN)).when(service).authorize("bad");
+        assertThrows(ResponseStatusException.class, () -> controller.closeDay("bad", 3L, null));
+        verify(closeDay, times(1)).closeFarm(anyLong(), any());
     }
 }

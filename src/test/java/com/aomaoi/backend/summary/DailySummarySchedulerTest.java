@@ -3,6 +3,7 @@ package com.aomaoi.backend.summary;
 import com.aomaoi.backend.entity.AdminProfile;
 import com.aomaoi.backend.entity.User;
 import com.aomaoi.backend.repository.AdminProfileRepository;
+import com.aomaoi.backend.service.AttendanceCloseDayService;
 import com.aomaoi.backend.service.AuditLogService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,21 +45,23 @@ class DailySummarySchedulerTest {
     private JdbcTemplate jdbc;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private AttendanceCloseDayService closeDay;
 
     private final SummaryEmailBuilder emailBuilder = new SummaryEmailBuilder();
     private final SimpleMeterRegistry metrics = new SimpleMeterRegistry();
     private DailySummaryScheduler scheduler;
 
-    private final DailySummary summary = new DailySummary("ฟาร์ม", DAY, null, List.of("Anan"), 2, BigDecimal.ZERO);
+    private final DailySummary summary = new DailySummary("ฟาร์ม", DAY, null, List.of("Anan"), List.of(), 1, 2, BigDecimal.ZERO);
 
     @BeforeEach
     void setUp() {
-        scheduler = newScheduler(true);
+        scheduler = newScheduler(true, false);
     }
 
-    private DailySummaryScheduler newScheduler(boolean enabled) {
+    private DailySummaryScheduler newScheduler(boolean enabled, boolean closeDayEnabled) {
         return new DailySummaryScheduler(adminRepository, summaryService, emailBuilder, mailer, jdbc,
-                auditLogService, metrics, CLOCK, enabled);
+                auditLogService, metrics, CLOCK, closeDay, enabled, closeDayEnabled);
     }
 
     private static AdminProfile admin(Long id, String email, Long farmId) {
@@ -154,20 +157,20 @@ class DailySummarySchedulerTest {
     }
 
     @Test
-    void skipsFarmsWithNoWorkersWithoutClaimingTheDay() {
+    void skipsADayOffWithoutClaimingTheDay() {
         when(mailer.isConfigured()).thenReturn(true);
         when(summaryService.build(1L, DAY)).thenReturn(Optional.empty());
 
-        assertEquals(DailySummaryScheduler.Outcome.SKIPPED_NO_WORKERS,
+        assertEquals(DailySummaryScheduler.Outcome.SKIPPED_NO_ATTENDANCE,
                 scheduler.sendTo(admin(7L, "a@example.com", 1L), DAY));
         verifyNoInteractions(jdbc);
     }
 
     @Test
     void scheduledRunDoesNothingWhileTheFeatureIsDisabled() {
-        newScheduler(false).runScheduled();
+        newScheduler(false, false).runScheduled();
 
-        verifyNoInteractions(adminRepository, mailer, summaryService, jdbc);
+        verifyNoInteractions(adminRepository, mailer, summaryService, jdbc, closeDay);
     }
 
     @Test
@@ -181,5 +184,41 @@ class DailySummarySchedulerTest {
         scheduler.runScheduled();
 
         verify(mailer).send(eq("a@example.com"), any(SummaryEmail.class));
+    }
+
+    @Test
+    void scheduledRunClosesTheDayBeforeSendingTheEmails() {
+        var scheduler = newScheduler(true, true);
+        when(mailer.isConfigured()).thenReturn(true);
+        when(adminRepository.findByStatusAndEmailIsNotNullAndFarmIdIsNotNull("active"))
+                .thenReturn(List.of(admin(7L, "a@example.com", 1L)));
+        when(summaryService.build(1L, DAY)).thenReturn(Optional.of(summary));
+        when(jdbc.update(contains("INSERT INTO daily_summary_log"), eq(7L), eq(DAY))).thenReturn(1);
+
+        scheduler.runScheduled();
+
+        var order = inOrder(closeDay, mailer);
+        order.verify(closeDay).closeAllFarms(DAY);
+        order.verify(mailer).send(eq("a@example.com"), any(SummaryEmail.class));
+    }
+
+    @Test
+    void closeDayRunsEvenWhenTheEmailFeatureIsOff() {
+        newScheduler(false, true).runScheduled();
+
+        verify(closeDay).closeAllFarms(DAY);
+        verifyNoInteractions(adminRepository, mailer, summaryService);
+    }
+
+    @Test
+    void aFailingCloseDayDoesNotStopTheEmails() {
+        var scheduler = newScheduler(true, true);
+        when(closeDay.closeAllFarms(DAY)).thenThrow(new IllegalStateException("db down"));
+        when(mailer.isConfigured()).thenReturn(true);
+        when(adminRepository.findByStatusAndEmailIsNotNullAndFarmIdIsNotNull("active")).thenReturn(List.of());
+
+        scheduler.runScheduled();
+
+        verify(adminRepository).findByStatusAndEmailIsNotNullAndFarmIdIsNotNull("active");
     }
 }

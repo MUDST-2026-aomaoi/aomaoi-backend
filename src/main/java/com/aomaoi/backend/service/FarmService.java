@@ -65,7 +65,7 @@ public class FarmService {
         int workerCount = Math.toIntExact(workerRepository.countByFarmIdAndStatusNot(id, "inactive"));
         int adminCount = Math.toIntExact(adminRepository.countByFarmIdAndStatusNot(id, "inactive"));
         var total = workLogRepository.sumTotalByFarmId(id);
-        LocalDate today = LocalDate.now();
+        LocalDate today = com.aomaoi.backend.config.BusinessTime.today();
         var month = workLogRepository.sumTotalByFarmIdAndWorkDateBetween(id, today.withDayOfMonth(1), today);
         return new FarmResponseDTO(farm.getId(), farm.getName(), farm.getLocation(), farm.getImage(),
                 workerCount, adminCount, month == null ? BigDecimal.ZERO : month,

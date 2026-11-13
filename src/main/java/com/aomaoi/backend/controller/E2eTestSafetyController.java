@@ -1,6 +1,8 @@
 package com.aomaoi.backend.controller;
 
 import com.aomaoi.backend.repository.AdminProfileRepository;
+import com.aomaoi.backend.service.AttendanceCloseDayService;
+import com.aomaoi.backend.service.AttendanceService;
 import com.aomaoi.backend.service.E2eRunService;
 import com.aomaoi.backend.summary.DailySummaryScheduler;
 import lombok.RequiredArgsConstructor;
@@ -19,10 +21,13 @@ public class E2eTestSafetyController {
     private final DailySummaryScheduler dailySummary;
     private final AdminProfileRepository admins;
     private final Clock clock;
+    private final AttendanceCloseDayService closeDay;
+    private final AttendanceService attendance;
 
     @GetMapping("/e2e-readiness")
     public Map<String, Object> readiness() {
-        return Map.of("safeForE2e", runs.enabled(), "mode", "shared-tracked");
+        // attendanceOpen: false after the closing time, when today can no longer be edited (E2E specs skip then)
+        return Map.of("safeForE2e", runs.enabled(), "mode", "shared-tracked", "attendanceOpen", attendance.isTodayOpen());
     }
 
     @PostMapping("/runs")
@@ -51,6 +56,18 @@ public class E2eTestSafetyController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Admin not found"));
         var outcome = dailySummary.sendTo(admin, date != null ? date : LocalDate.now(clock));
         return Map.of("outcome", outcome.name());
+    }
+
+    /**
+     * Runs the 18:00 close-day for ONE farm on demand (demo / E2E). Support key required. Workers owned by an
+     * E2E run are never touched by close-day, so this only affects regular data of that farm.
+     */
+    @PostMapping("/attendance/close-day")
+    public Map<String, Integer> closeDay(@RequestHeader("X-E2E-Support-Key") String key,
+                                         @RequestParam Long farmId,
+                                         @RequestParam(required = false) LocalDate date) {
+        runs.authorize(key);
+        return Map.of("created", closeDay.closeFarm(farmId, date != null ? date : LocalDate.now(clock)));
     }
 
     @DeleteMapping("/runs/{id}")

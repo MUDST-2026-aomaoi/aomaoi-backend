@@ -2,6 +2,7 @@ package com.aomaoi.backend.summary;
 
 import com.aomaoi.backend.entity.AdminProfile;
 import com.aomaoi.backend.repository.AdminProfileRepository;
+import com.aomaoi.backend.service.AttendanceCloseDayService;
 import com.aomaoi.backend.service.AuditLogService;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
@@ -17,6 +18,9 @@ import java.util.Optional;
 
 /**
  * Sends each active Admin (with an e-mail and a farm) the end-of-day summary of their farm.
+ *
+ * <p>Before sending, the 18:00 run closes the day (see {@link AttendanceCloseDayService}) so the e-mail
+ * reads final attendance. Close-day has its own flag because it must also run when SMTP is not configured.
  *
  * <p>Several app replicas may run this at the same time, so a row in {@code daily_summary_log}
  * (unique per admin and day) is claimed first and only the claimer sends. Failed sends are retried
@@ -37,11 +41,15 @@ public class DailySummaryScheduler {
     private final MeterRegistry metrics;
     private final Clock clock;
     private final boolean enabled;
+    private final AttendanceCloseDayService closeDay;
+    private final boolean closeDayEnabled;
 
     public DailySummaryScheduler(AdminProfileRepository adminRepository, DailySummaryService summaryService,
                                  SummaryEmailBuilder emailBuilder, SummaryMailer mailer, JdbcTemplate jdbc,
                                  AuditLogService auditLogService, MeterRegistry metrics, Clock clock,
-                                 @Value("${app.daily-summary.enabled:false}") boolean enabled) {
+                                 AttendanceCloseDayService closeDay,
+                                 @Value("${app.daily-summary.enabled:false}") boolean enabled,
+                                 @Value("${app.attendance.close-day.enabled:false}") boolean closeDayEnabled) {
         this.adminRepository = adminRepository;
         this.summaryService = summaryService;
         this.emailBuilder = emailBuilder;
@@ -51,13 +59,22 @@ public class DailySummaryScheduler {
         this.metrics = metrics;
         this.clock = clock;
         this.enabled = enabled;
+        this.closeDay = closeDay;
+        this.closeDayEnabled = closeDayEnabled;
     }
 
     /** 18:00 first send, then 18:15 ... 20:45 only retries failures (already-sent admins are skipped). */
     @Scheduled(cron = "${app.daily-summary.cron:0 0/15 18-20 * * *}", zone = "${app.business-zone:Asia/Bangkok}")
     public void runScheduled() {
-        if (!enabled) return;
-        runForAllAdmins(LocalDate.now(clock));
+        LocalDate today = LocalDate.now(clock);
+        if (closeDayEnabled) {
+            try {
+                closeDay.closeAllFarms(today);
+            } catch (RuntimeException e) {
+                LOG.warn("Close-day failed: {}", e.getMessage());
+            }
+        }
+        if (enabled) runForAllAdmins(today);
     }
 
     public void runForAllAdmins(LocalDate date) {
@@ -84,7 +101,7 @@ public class DailySummaryScheduler {
         Optional<DailySummary> summary = summaryService.build(admin.getFarmId(), date);
         if (summary.isEmpty()) {
             count("skipped");
-            return Outcome.SKIPPED_NO_WORKERS;
+            return Outcome.SKIPPED_NO_ATTENDANCE;
         }
         if (!claim(admin.getId(), date)) {
             return Outcome.ALREADY_HANDLED;
@@ -126,6 +143,6 @@ public class DailySummaryScheduler {
     }
 
     public enum Outcome {
-        SENT, FAILED, ALREADY_HANDLED, SKIPPED_NO_RECIPIENT, SKIPPED_NOT_CONFIGURED, SKIPPED_NO_WORKERS
+        SENT, FAILED, ALREADY_HANDLED, SKIPPED_NO_RECIPIENT, SKIPPED_NOT_CONFIGURED, SKIPPED_NO_ATTENDANCE
     }
 }

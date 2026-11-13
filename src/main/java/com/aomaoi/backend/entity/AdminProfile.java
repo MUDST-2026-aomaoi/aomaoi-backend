@@ -36,7 +36,7 @@ public class AdminProfile {
     @PrePersist
     protected void onCreate() {
         if (joinedDate == null) {
-            joinedDate = LocalDate.now();
+            joinedDate = com.aomaoi.backend.config.BusinessTime.today();
         }
     }
 }

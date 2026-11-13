@@ -15,7 +15,7 @@ React/browser ──HTTP──> Spring Boot API
 - **Prometheus** scrapes the app every 15 seconds. Metrics use route templates and fixed operation names; they do not use user, worker, farm, request, or financial values as labels.
 - **Alloy** tails the app's dedicated log volume once. The image prepares that directory for the existing non-root app user. Alloy does not mount the Docker socket or ingest PostgreSQL, frontend, or audit-log storage.
 - **Loki** stores local logs for seven days. Logs include trace/span IDs when a sampled trace exists. Application logs must not contain credentials, tokens, or sensitive financial records.
-- **Tempo** receives OTLP traces and retains blocks for seven days.
+- **Tempo** receives OTLP traces and retains blocks for seven days. Its local-blocks processor serves recent TraceQL metrics queries used by Grafana Traces Drilldown; generator data stays in the Tempo volume.
 - **Grafana** provisions all three data sources and four read-only dashboards. Trace IDs in logs link to Tempo, and Tempo is configured to query matching Loki logs.
 
 This is a single-host development topology with local filesystem volumes and no service replication or authenticated internal telemetry transport. Keep the stack on a trusted development machine. The browser-facing Grafana port and host management port bind to loopback; Prometheus, Loki, and Tempo have no published host ports. This Compose setup is not a production deployment recipe.

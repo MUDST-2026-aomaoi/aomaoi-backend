@@ -74,7 +74,7 @@ services:
     build:
       context: ../aomaoi-frontend
       args:
-        VITE_API_BASE_URL: http://localhost:8081/api
+        VITE_API_BASE_URL: /api
     container_name: aomaoi-frontend
     ports:
       - "${FRONTEND_PORT:-3000}:80"

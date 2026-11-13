@@ -1,0 +1,51 @@
+name: Database Migration (Neon)
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "src/main/resources/db/changelog/**"
+      - ".github/workflows/migrate.yml"
+  workflow_dispatch:
+
+# Never run two migrations against the same database at once.
+concurrency:
+  group: neon-migrate-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # Liquibase applies only changesets not yet recorded in DATABASECHANGELOG,
+    # and fails if an already-applied changeset was edited (checksum mismatch).
+    - name: Validate changelog
+      run: |
+        docker run --rm \
+          -v "$PWD/src/main/resources:/liquibase/changelog" \
+          liquibase/liquibase:4.29 \
+          --search-path=/liquibase/changelog \
+          --changelog-file=db/changelog/db.changelog-master.yaml \
+          validate
+
+    - name: Run Liquibase update
+      env:
+        NEON_JDBC_URL: ${{ secrets.NEON_JDBC_URL_UNPOOLED }}
+        NEON_DB_USER: ${{ secrets.NEON_DB_USER }}
+        NEON_DB_PASSWORD: ${{ secrets.NEON_DB_PASSWORD }}
+      run: |
+        docker run --rm \
+          -e NEON_JDBC_URL -e NEON_DB_USER -e NEON_DB_PASSWORD \
+          -v "$PWD/src/main/resources:/liquibase/changelog" \
+          liquibase/liquibase:4.29 \
+          --search-path=/liquibase/changelog \
+          --changelog-file=db/changelog/db.changelog-master.yaml \
+          --url="$NEON_JDBC_URL" \
+          --username="$NEON_DB_USER" \
+          --password="$NEON_DB_PASSWORD" \
+          update
